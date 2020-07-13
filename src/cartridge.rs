@@ -1,10 +1,9 @@
 use crate::Result;
 
-use std::io::{self, Read};
 use std::fs::File;
+use std::io::{self, Read};
 use std::path::Path;
 use std::slice;
-
 
 pub struct CartridgeHeader {
     // Should be 0x1a53454e to identify the file as an iNES file

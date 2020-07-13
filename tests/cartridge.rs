@@ -1,5 +1,5 @@
-use std::path::Path;
 use nes::cartridge::CartridgeHeader;
+use std::path::Path;
 
 #[test]
 fn read_header() {
