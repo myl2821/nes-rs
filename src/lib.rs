@@ -1,10 +1,13 @@
 #[macro_use]
 extern crate error_chain;
 
-pub mod cartridge;
+mod cartridge;
+mod mapper;
+
+pub use cartridge::{Cartridge, CartridgeHeader};
 
 error_chain! {
     foreign_links {
-        IoErr(std::io::Error);
+        Io(std::io::Error);
     }
 }

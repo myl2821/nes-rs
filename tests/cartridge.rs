@@ -1,5 +1,5 @@
-use nes::cartridge::Cartridge;
-use nes::cartridge::CartridgeHeader;
+use nes::Cartridge;
+use nes::CartridgeHeader;
 use std::path::Path;
 
 #[test]
@@ -20,5 +20,5 @@ fn load_cartridge() {
     assert_eq!(8192, cartridge.chr.len());
     assert_eq!(0, cartridge.mapper);
     assert_eq!(0, cartridge.mirror);
-    assert_eq!(false, cartridge.battery);
+    assert_eq!(false, cartridge.has_sram);
 }
