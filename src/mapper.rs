@@ -1,4 +1,5 @@
 use crate::{Cartridge, Result};
+use std::fmt::format;
 
 // The NES’ limited memory was sufficient for early games, however as they became more
 // complex, games became larger and the memory was insufficient. To allow cartridges to
@@ -31,6 +32,7 @@ impl<'a> Mapper0<'a> {
     }
 
     fn is_unrom256(&self) -> bool {
+        // rom size > 16KB ?
         self.cartridge.prg.len() / (1 << 10) > 16
     }
 }
@@ -38,23 +40,18 @@ impl<'a> Mapper0<'a> {
 impl<'a> Mapper for Mapper0<'a> {
     fn read(&self, addr: u16) -> Result<u8> {
         match addr {
-            // READ From CPU RAM (2KB)
-            0..=0x1fff => todo!(),
-            // PPU Registers
-            0x2000..=0x3fff => todo!(),
-            // APU Registers
-            0x4000..=0x4013 => Ok(0),
-            // OAM DAM
-            0x4014 => todo!(),
-            // APU Register
-            0x4015 => todo!(),
-            // Joypad 1
-            0x4016 => todo!(),
-            // Joypad 2
-            0x4017 => todo!(),
-            // cartridge
-            0x4018..=0xffff => todo!(),
+            0x6000..=0x7fff => Ok(self.cartridge.sram[addr as usize - 0x6000]),
+            0x8000..=0xbfff => Ok(self.cartridge.prg[addr as usize - 0x8000]),
+            0xc000..=0xffff => {
+                if (self.is_unrom256()) {
+                    Ok(self.cartridge.prg[addr as usize - 0x8000])
+                } else {
+                    Ok(self.cartridge.prg[addr as usize - 0xc000])
+                }
+            }
+            _ => Err(format!("invalid address: {:#x}", addr).into())
         }
     }
+
     fn write(&mut self, addr: u16, v: u8) {}
 }

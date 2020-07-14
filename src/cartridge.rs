@@ -74,6 +74,8 @@ pub struct Cartridge {
     pub mirror: u8,
     // Battery tag
     pub has_sram: bool,
+    // SRAM
+    pub sram: [u8; 0x2000],
 }
 
 impl Cartridge {
@@ -108,12 +110,14 @@ impl Cartridge {
         let mut chr = vec![0; (header.chr_size as usize) * 8 * (1 << 10)];
         f.read(&mut chr)?;
 
+        let sram = [0; 0x2000];
         Ok(Cartridge {
             prg,
             chr,
             mapper,
             mirror,
             has_sram,
+            sram,
         })
     }
 }
