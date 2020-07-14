@@ -6,7 +6,7 @@ use std::io::{self, Read, SeekFrom};
 use std::path::Path;
 use std::slice;
 
-pub const MAGIC_MUMBER: u32 = 0x1a53454e;
+pub const MAGIC_NUMBER: u32 = 0x1a53454e;
 
 pub struct CartridgeHeader {
     // Should be 0x1a53454e to identify the file as an iNES file
@@ -79,7 +79,7 @@ pub struct Cartridge {
 impl Cartridge {
     pub fn new(path: &Path) -> Result<Self> {
         let header = CartridgeHeader::new(path)?;
-        if header.magic != MAGIC_MUMBER {
+        if header.magic != MAGIC_NUMBER {
             return Err(From::from("Magic number is wrong"));
         }
 
