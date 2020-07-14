@@ -8,6 +8,7 @@ use std::slice;
 
 pub const MAGIC_NUMBER: u32 = 0x1a53454e;
 
+//
 pub struct CartridgeHeader {
     // Should be 0x1a53454e to identify the file as an iNES file
     pub magic: u32,
@@ -51,17 +52,18 @@ impl CartridgeHeader {
     }
 
     pub fn mirror_num(&self) -> u8 {
-        (self.rom_ctrl1 & 1) | (((self.rom_ctrl1 >> 3) & 1) << 1)
+        (self.rom_ctrl1 & 1) | ((self.rom_ctrl1 & 0x08) >> 2)
     }
 
-    pub fn battery(&self) -> bool {
-        (self.rom_ctrl1 >> 1 & 1) == 1
+    pub fn has_battery(&self) -> bool {
+        (self.rom_ctrl1 & 0x02) != 0
     }
 
-    pub fn trainer(&self) -> bool {
-        (self.rom_ctrl1 & 4) == 4
+    pub fn has_trainer(&self) -> bool {
+        (self.rom_ctrl1 & 0x04) != 0
     }
 }
+
 
 pub struct Cartridge {
     // PRG-ROM data
@@ -85,7 +87,7 @@ impl Cartridge {
 
         let mapper = header.mapper_num();
         let mirror = header.mirror_num();
-        let battery = header.battery();
+        let battery = header.has_battery();
 
         let mut f = File::open(path)?;
 
@@ -95,7 +97,7 @@ impl Cartridge {
         ))?;
 
         // Ignore trainer data
-        if header.trainer() {
+        if header.has_trainer() {
             let mut trainer = [0; 512];
             f.read(&mut trainer)?;
         }
