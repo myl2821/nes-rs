@@ -1,0 +1,5 @@
+language: rust
+script:
+  - rustc --version
+  - cargo build --verbose --all
+  - cargo test --verbose --all
