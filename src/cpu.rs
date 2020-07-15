@@ -5,7 +5,7 @@ const VERCTOR_RST: u16 = 0xFFFC;
 const VERCTOR_IRQ: u16 = 0xFFFE;
 
 pub struct CPU<T: Mapper> {
-    mapper: T
+    mapper: T,
 }
 
 // CPU Memory map
@@ -35,7 +35,7 @@ impl<T: Mapper> CPU<T> {
             0x4016 => todo!(),
             0x4017 => todo!(),
             0x4018..=0x401f => Ok(0), // normally disabled, maybe should return Err
-            0x4020..=0xffff => self.mapper.read(addr)
+            0x4020..=0xffff => self.mapper.read(addr),
         }
     }
 

@@ -8,4 +8,5 @@ edition = "2018"
 
 [dependencies]
 error-chain = "0.12"
+sdl2 = "0.34"
 

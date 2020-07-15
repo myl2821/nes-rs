@@ -1,5 +1,5 @@
-use std::path::Path;
 use nes::{Cartridge, Mapper0, CPU};
+use std::path::Path;
 
 #[test]
 fn mapper0() {

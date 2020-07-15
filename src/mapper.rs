@@ -49,7 +49,7 @@ impl<'a> Mapper for Mapper0<'a> {
                     Ok(self.cartridge.prg[addr as usize - 0xc000])
                 }
             }
-            _ => Err(format!("invalid address: {:#x}", addr).into())
+            _ => Err(format!("invalid address: {:#x}", addr).into()),
         }
     }
 
