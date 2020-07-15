@@ -20,6 +20,9 @@ const V_F: u8 = 0x40;
 const N_F: u8 = 0x80;
 
 pub struct CPU<T: Mapper> {
+<<<<<<< HEAD
+    mapper: T,
+=======
     // Memory mapper
     mapper: T,
 
@@ -84,6 +87,7 @@ struct info {
     addr: u16,
     pc: u16,
     mode: Mode,
+>>>>>>> feat: basic cpu impl
 }
 
 // CPU Memory map
@@ -146,6 +150,9 @@ impl<T: Mapper> CPU<T> {
     pub fn irq(&self) -> Result<u16> {
         self.read16(VERCTOR_IRQ)
     }
+<<<<<<< HEAD
+}
+=======
 
     pub fn reset(&mut self) {
         self.PC = self.rst().unwrap();
@@ -1880,3 +1887,4 @@ const OP_MAP: [OP; 256] = [
         len: 0,
     },
 ];
+>>>>>>> feat: basic cpu impl

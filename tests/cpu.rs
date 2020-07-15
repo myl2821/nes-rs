@@ -12,3 +12,22 @@ fn mapper0() {
     assert_eq!(0xc004, cpu.rst().unwrap());
     assert_eq!(0xc5f4, cpu.irq().unwrap());
 }
+
+#[test]
+fn run() {
+    let path = Path::new("tests/fixture/nestest.nes");
+    let mut cartridge = Cartridge::new(path).unwrap();
+    let mapper0 = Mapper0::new(&mut cartridge);
+    let mut cpu = CPU::new(mapper0);
+
+    cpu.jmp_c000();
+    println!("{}", cpu.debug_info());
+    cpu.run();
+    println!("{}", cpu.debug_info());
+    cpu.run();
+    println!("{}", cpu.debug_info());
+    cpu.run();
+    println!("{}", cpu.debug_info());
+    cpu.run();
+    println!("{}", cpu.debug_info());
+}
