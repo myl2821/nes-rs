@@ -14,7 +14,7 @@ use std::fmt::format;
 // contents. The use of memory mappers was one of the factors in the NES’ longevity, allowing
 // it to survive technological deficiencies.
 pub trait Mapper {
-    fn read(&self, addr: u16) -> Result<u8>;
+    fn read(&self, addr: u16) -> u8;
     fn write(&mut self, addr: u16, v: u8);
 }
 
@@ -38,20 +38,35 @@ impl<'a> Mapper0<'a> {
 }
 
 impl<'a> Mapper for Mapper0<'a> {
-    fn read(&self, addr: u16) -> Result<u8> {
+    fn read(&self, addr: u16) -> u8 {
         match addr {
-            0x6000..=0x7fff => Ok(self.cartridge.sram[addr as usize - 0x6000]),
-            0x8000..=0xbfff => Ok(self.cartridge.prg[addr as usize - 0x8000]),
+            0x6000..=0x7fff => self.cartridge.sram[addr as usize - 0x6000],
+            0x8000..=0xbfff => self.cartridge.prg[addr as usize - 0x8000],
             0xc000..=0xffff => {
                 if (self.is_unrom256()) {
-                    Ok(self.cartridge.prg[addr as usize - 0x8000])
+                    let last_bank_start = (self.cartridge.prg.len() / 0x4000 - 1) * 0x4000;
+                    self.cartridge.prg[last_bank_start + addr as usize - 0xc0000]
                 } else {
-                    Ok(self.cartridge.prg[addr as usize - 0xc000])
+                    self.cartridge.prg[addr as usize - 0xc000]
                 }
             }
-            _ => Err(format!("invalid address: {:#x}", addr).into()),
+            _ => panic!("invalid address: {:#x}", addr),
         }
     }
 
-    fn write(&mut self, addr: u16, v: u8) {}
+    fn write(&mut self, addr: u16, v: u8) {
+        match addr {
+            0x6000..=0x7fff => self.cartridge.sram[addr as usize - 0x6000] = v,
+            0x8000..=0xbfff => self.cartridge.prg[addr as usize - 0x8000] = v,
+            0xc000..=0xffff => {
+                if (self.is_unrom256()) {
+                    let last_bank_start = (self.cartridge.prg.len() / 0x4000 - 1) * 0x4000;
+                    self.cartridge.prg[last_bank_start + addr as usize - 0xc0000] = v
+                } else {
+                    self.cartridge.prg[addr as usize - 0xc000] = v
+                }
+            }
+            _ => panic!("invalid address: {:#x}", addr),
+        }
+    }
 }
