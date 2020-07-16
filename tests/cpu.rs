@@ -48,7 +48,7 @@ fn run() {
         let target: Status = result.unwrap();
         match cpu.debug_info() {
             (s, addr, ins, a, x, y, p, sp, cyc) => {
-                let status = Status {
+                let current = Status {
                     addr: format!("{:04X}", addr),
                     ins: ins.clone(),
                     a: format!("{:02X}", a),
@@ -58,9 +58,9 @@ fn run() {
                     sp: format!("{:02X}", sp),
                     cyc: cyc,
                 };
-                println!("current: {:?}", target);
+                println!("current: {:?}", current);
                 println!("target : {:?}", target);
-                assert_eq!(status, target);
+                assert_eq!(current, target);
             }
         }
         println!("execute line {}...\n", i);
