@@ -1,4 +1,6 @@
 language: rust
+before_install:
+  - sudo apt-get -y install libsdl2-dev
 script:
   - rustc --version
   - cargo build --verbose --all
