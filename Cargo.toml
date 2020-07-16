@@ -10,3 +10,7 @@ edition = "2018"
 error-chain = "0.12"
 sdl2 = "0.34"
 
+[dev-dependencies]
+csv = "1.1"
+serde = { version = "1", features = ["derive"] }
+

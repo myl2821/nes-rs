@@ -209,7 +209,7 @@ impl<T: Mapper> CPU<T> {
         self.cycles = cycles
     }
 
-    pub fn run(&mut self) -> u64 {
+    pub fn step(&mut self) -> u64 {
         let cycles = self.cycles;
 
         // TODO: Detect interrupts
@@ -243,7 +243,7 @@ impl<T: Mapper> CPU<T> {
     }
 
     // For Debug
-    pub fn debug_info(&self) -> String {
+    pub fn debug_info(&self) -> (String, u16, String, u8, u8, u8, u8, u8, u64) {
         let opcode = self.read8(self.PC) as usize;
         let op = &OP_MAP[opcode];
         let addr = self.addr(op.mode);
@@ -276,11 +276,22 @@ impl<T: Mapper> CPU<T> {
         };
 
         // TODO: PPU
-        return format!(
-            "{:04X}  {} {} {}  {} {}\t\t\tA:{:02X} X:{:02X} Y:{:02X} P:{:02X} SP:{:02X} PPU:{:3o},{:3o} CYC:{}",
-            self.PC, byte0, byte1, byte2, op.name, op_str, self.A, self.X, self.Y,
-            self.P, self.SP, 0, (self.cycles*3)%341,self.cycles
-            );
+        let s = format!(
+        "{:04X}  {} {} {}  {} {}\t\t\tA:{:02X} X:{:02X} Y:{:02X} P:{:02X} SP:{:02X} PPU:{:3o},{:3o} CYC:{}",
+        self.PC, byte0, byte1, byte2, op.name, op_str, self.A, self.X, self.Y,
+        self.P, self.SP, 0, (self.cycles*3)%341,self.cycles
+        );
+        (
+            s,
+            self.PC,
+            op.name.into(),
+            self.A,
+            self.X,
+            self.Y,
+            self.P,
+            self.SP,
+            self.cycles,
+        )
     }
 
     fn addr(&self, mode: Mode) -> u16 {
