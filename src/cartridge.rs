@@ -106,7 +106,7 @@ impl Cartridge {
         let mut prg = vec![0; (header.prg_size as usize) * 16 * (1 << 10)];
         f.read(&mut prg)?;
 
-        // Read CHR-ROM, 16KB each
+        // Read CHR-ROM, 8KB each
         let mut chr = vec![0; (header.chr_size as usize) * 8 * (1 << 10)];
         f.read(&mut chr)?;
 

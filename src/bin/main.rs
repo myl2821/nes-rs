@@ -67,7 +67,7 @@ fn draw() {
 
         let elapsed = last_frame_ts.elapsed().as_nanos() as u32;
         if elapsed < INTERVAL {
-            let time_to_sleep = INTERVAL - last_frame_ts.elapsed().as_nanos() as u32;
+            let time_to_sleep = INTERVAL - elapsed;
             std::thread::sleep(Duration::new(0, time_to_sleep));
         }
         last_frame_ts = Instant::now();

@@ -24,16 +24,16 @@ pub trait Mapper {
 // $C000 ~ $FFFF -> Last 16 KB of ROM (NROM-256) or mirror of $8000-$BFFF (NROM-128)
 pub struct Mapper0<'a> {
     cartridge: &'a mut Cartridge,
+    is_unrom256: bool,
 }
 
 impl<'a> Mapper0<'a> {
     pub fn new(cartridge: &'a mut Cartridge) -> Self {
-        Mapper0 { cartridge }
-    }
-
-    fn is_unrom256(&self) -> bool {
-        // rom size > 16KB ?
-        self.cartridge.prg.len() / (1 << 10) > 16
+        let is_unrom256 = cartridge.prg.len() / (1 << 10) > 16;
+        Mapper0 {
+            cartridge,
+            is_unrom256,
+        }
     }
 }
 
@@ -43,7 +43,7 @@ impl<'a> Mapper for Mapper0<'a> {
             0x6000..=0x7fff => self.cartridge.sram[addr as usize - 0x6000],
             0x8000..=0xbfff => self.cartridge.prg[addr as usize - 0x8000],
             0xc000..=0xffff => {
-                if (self.is_unrom256()) {
+                if (self.is_unrom256) {
                     let last_bank_start = (self.cartridge.prg.len() / 0x4000 - 1) * 0x4000;
                     self.cartridge.prg[last_bank_start + addr as usize - 0xc0000]
                 } else {
@@ -59,7 +59,7 @@ impl<'a> Mapper for Mapper0<'a> {
             0x6000..=0x7fff => self.cartridge.sram[addr as usize - 0x6000] = v,
             0x8000..=0xbfff => self.cartridge.prg[addr as usize - 0x8000] = v,
             0xc000..=0xffff => {
-                if (self.is_unrom256()) {
+                if (self.is_unrom256) {
                     let last_bank_start = (self.cartridge.prg.len() / 0x4000 - 1) * 0x4000;
                     self.cartridge.prg[last_bank_start + addr as usize - 0xc0000] = v
                 } else {
