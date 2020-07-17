@@ -173,9 +173,9 @@ impl<T: Mapper> CPU<T> {
         match addr {
             0..=0x1fff => self.ram[addr as usize] = v,
             0x2000..=0x3fff => todo!(),
-            0x4000..=0x4013 => todo!(),
+            0x4000..=0x4013 => (), //FIXME todo!(),
             0x4014 => todo!(),
-            0x4015 => todo!(),
+            0x4015 => (), //FIXME todo!(),
             0x4016 => todo!(),
             0x4017 => todo!(),
             0x4018..=0x401f => todo!(),
@@ -371,7 +371,7 @@ impl<T: Mapper> CPU<T> {
     // add 2 to cycles if branch occurs to different page
     fn add_branch_cycle(&mut self, info: &Info) {
         self.cycles += 1;
-        if self.page_diff(self.PC, info.addr) {
+        if self.page_diff(info.pc, info.addr) {
             self.cycles += 1
         }
     }
@@ -469,8 +469,10 @@ impl<T: Mapper> CPU<T> {
         }
     }
 
-    // 6502 Instruction Set
-    // https://www.masswerk.at/6502/6502_instruction_set.html
+    ///////////////////////////////////////////////////////////////
+    //    6502 Instruction Set                                   //
+    //    https://www.masswerk.at/6502/6502_instruction_set.html //
+    ///////////////////////////////////////////////////////////////
 
     // ADC Add Memory to Accumulator with Carry
     // A + M + C -> A, C
@@ -1031,7 +1033,130 @@ impl<T: Mapper> CPU<T> {
         self.set_NZ(self.A)
     }
 
-    fn err(&mut self, info: &Info) {
+    //////////////////////////////////////////////////////////////////
+    //    6502 Extra Instructions                                   //
+    //    http://www.ffd2.com/fridge/docs/6502-NMOS.extra.opcodes   //
+    //////////////////////////////////////////////////////////////////
+
+    fn ahx(&mut self, info: &Info) {
+        unimplemented!()
+    }
+
+    fn alr(&mut self, info: &Info) {
+        unimplemented!()
+    }
+
+    fn anc(&mut self, info: &Info) {
+        unimplemented!()
+    }
+
+    fn arr(&mut self, info: &Info) {
+        unimplemented!()
+    }
+
+    fn axs(&mut self, info: &Info) {
+        unimplemented!()
+    }
+
+    // DCP This opcode DECs the contents of a memory location and then CMPs the result
+    // with the A register.
+    fn dcp(&mut self, info: &Info) {
+        self.dec(info);
+        self.cmp(info);
+    }
+
+    fn las(&mut self, info: &Info) {
+        unimplemented!()
+    }
+
+    // LAX This opcode loads both the accumulator and the X register with the contents
+    // of a memory location.
+    // Sub-instructions: LDA, LDX
+    fn lax(&mut self, info: &Info) {
+        self.lda(info);
+        self.ldx(info)
+    }
+
+    // RLA ROLs the contents of a memory location and then ANDs the result with
+    // the accumulator.
+    // Sub-instructions: ROL, AND
+    fn rla(&mut self, info: &Info) {
+        self.rol(info);
+        self.and(info);
+    }
+
+    // RRA RORs the contents of a memory location and then ADCs the result with
+    // the accumulator.
+    // Sub-instructions: ROR, ADC
+    fn rra(&mut self, info: &Info) {
+        self.ror(info);
+        self.adc(info)
+    }
+
+    // SAX ANDs the contents of the A and X registers (leaving the contents of A
+    // intact), subtracts an immediate value, and then stores the result in X.
+    // ... A few points might be made about the action of subtracting an immediate
+    // value.  It actually works just like the CMP instruction, except that CMP
+    // does not store the result of the subtraction it performs in any register.
+    // This subtract operation is not affected by the state of the Carry flag,
+    // though it does affect the Carry flag.  It does not affect the Overflow
+    // flag.
+    fn sax(&mut self, info: &Info) {
+        self.write8(info.addr, self.A & self.X)
+    }
+
+    fn sha(&mut self, info: &Info) {
+        unimplemented!()
+    }
+
+    fn shx(&mut self, info: &Info) {
+        unimplemented!()
+    }
+
+    fn shy(&mut self, info: &Info) {
+        unimplemented!()
+    }
+
+    // SLO This opcode ASLs the contents of a memory location and then ORs the result
+    // with the accumulator.
+    // Sub-instructions:
+    // ASL
+    // ORA
+    fn slo(&mut self, info: &Info) {
+        self.asl(info);
+        self.ora(info);
+    }
+
+    // SRE LSRs the contents of a memory location and then EORs the result with
+    // the accumulator.
+    // Sub-instructions: LSR, EOR
+    fn sre(&mut self, info: &Info) {
+        self.lsr(info);
+        self.eor(info);
+    }
+
+    fn tas(&mut self, info: &Info) {
+        unimplemented!()
+    }
+
+    fn xaa(&mut self, info: &Info) {
+        unimplemented!()
+    }
+
+    /////////////////////////////////////////////////////
+    //    6502 Undocumented Instructions               //
+    //    http://nesdev.com/undocumented_opcodes.txt   //
+    /////////////////////////////////////////////////////
+
+    // ISB
+    // Increase memory by one, then subtract memory from accu-mulator (with
+    // borrow). Status flags: N,V,Z,C
+    fn isb(&mut self, info: &Info) {
+        self.inc(info);
+        self.sbc(info);
+    }
+
+    fn kil(&mut self, info: &Info) {
         unimplemented!()
     }
 
@@ -1039,236 +1164,236 @@ impl<T: Mapper> CPU<T> {
         self.ins = [
             CPU::brk,
             CPU::ora,
-            CPU::err,
-            CPU::err,
+            CPU::kil,
+            CPU::slo,
             CPU::nop,
             CPU::ora,
             CPU::asl,
-            CPU::err,
+            CPU::slo,
             CPU::php,
             CPU::ora,
             CPU::asl,
-            CPU::err,
+            CPU::anc,
             CPU::nop,
             CPU::ora,
             CPU::asl,
-            CPU::err,
+            CPU::slo,
             CPU::bpl,
             CPU::ora,
-            CPU::err,
-            CPU::err,
+            CPU::kil,
+            CPU::slo,
             CPU::nop,
             CPU::ora,
             CPU::asl,
-            CPU::err,
+            CPU::slo,
             CPU::clc,
             CPU::ora,
             CPU::nop,
-            CPU::err,
+            CPU::slo,
             CPU::nop,
             CPU::ora,
             CPU::asl,
-            CPU::err,
+            CPU::slo,
             CPU::jsr,
             CPU::and,
-            CPU::err,
-            CPU::err,
+            CPU::kil,
+            CPU::rla,
             CPU::bit,
             CPU::and,
             CPU::rol,
-            CPU::err,
+            CPU::rla,
             CPU::plp,
             CPU::and,
             CPU::rol,
-            CPU::err,
+            CPU::anc,
             CPU::bit,
             CPU::and,
             CPU::rol,
-            CPU::err,
+            CPU::rla,
             CPU::bmi,
             CPU::and,
-            CPU::err,
-            CPU::err,
+            CPU::kil,
+            CPU::rla,
             CPU::nop,
             CPU::and,
             CPU::rol,
-            CPU::err,
+            CPU::rla,
             CPU::sec,
             CPU::and,
             CPU::nop,
-            CPU::err,
+            CPU::rla,
             CPU::nop,
             CPU::and,
             CPU::rol,
-            CPU::err,
+            CPU::rla,
             CPU::rti,
             CPU::eor,
-            CPU::err,
-            CPU::err,
+            CPU::kil,
+            CPU::sre,
             CPU::nop,
             CPU::eor,
             CPU::lsr,
-            CPU::err,
+            CPU::sre,
             CPU::pha,
             CPU::eor,
             CPU::lsr,
-            CPU::err,
+            CPU::alr,
             CPU::jmp,
             CPU::eor,
             CPU::lsr,
-            CPU::err,
+            CPU::sre,
             CPU::bvc,
             CPU::eor,
-            CPU::err,
-            CPU::err,
+            CPU::kil,
+            CPU::sre,
             CPU::nop,
             CPU::eor,
             CPU::lsr,
-            CPU::err,
+            CPU::sre,
             CPU::cli,
             CPU::eor,
             CPU::nop,
-            CPU::err,
+            CPU::sre,
             CPU::nop,
             CPU::eor,
             CPU::lsr,
-            CPU::err,
+            CPU::sre,
             CPU::rts,
             CPU::adc,
-            CPU::err,
-            CPU::err,
+            CPU::kil,
+            CPU::rra,
             CPU::nop,
             CPU::adc,
             CPU::ror,
-            CPU::err,
+            CPU::rra,
             CPU::pla,
             CPU::adc,
             CPU::ror,
-            CPU::err,
+            CPU::arr,
             CPU::jmp,
             CPU::adc,
             CPU::ror,
-            CPU::err,
+            CPU::rra,
             CPU::bvs,
             CPU::adc,
-            CPU::err,
-            CPU::err,
+            CPU::kil,
+            CPU::rra,
             CPU::nop,
             CPU::adc,
             CPU::ror,
-            CPU::err,
+            CPU::rra,
             CPU::sei,
             CPU::adc,
             CPU::nop,
-            CPU::err,
+            CPU::rra,
             CPU::nop,
             CPU::adc,
             CPU::ror,
-            CPU::err,
+            CPU::rra,
             CPU::nop,
             CPU::sta,
             CPU::nop,
-            CPU::err,
+            CPU::sax,
             CPU::sty,
             CPU::sta,
             CPU::stx,
-            CPU::err,
+            CPU::sax,
             CPU::dey,
             CPU::nop,
             CPU::txa,
-            CPU::err,
+            CPU::xaa,
             CPU::sty,
             CPU::sta,
             CPU::stx,
-            CPU::err,
+            CPU::sax,
             CPU::bcc,
             CPU::sta,
-            CPU::err,
-            CPU::err,
+            CPU::kil,
+            CPU::ahx,
             CPU::sty,
             CPU::sta,
             CPU::stx,
-            CPU::err,
+            CPU::sax,
             CPU::tya,
             CPU::sta,
             CPU::txs,
-            CPU::err,
-            CPU::err,
+            CPU::tas,
+            CPU::shy,
             CPU::sta,
-            CPU::err,
-            CPU::err,
+            CPU::shx,
+            CPU::ahx,
             CPU::ldy,
             CPU::lda,
             CPU::ldx,
-            CPU::err,
+            CPU::lax,
             CPU::ldy,
             CPU::lda,
             CPU::ldx,
-            CPU::err,
+            CPU::lax,
             CPU::tay,
             CPU::lda,
             CPU::tax,
-            CPU::err,
+            CPU::lax,
             CPU::ldy,
             CPU::lda,
             CPU::ldx,
-            CPU::err,
+            CPU::lax,
             CPU::bcs,
             CPU::lda,
-            CPU::err,
-            CPU::err,
+            CPU::kil,
+            CPU::lax,
             CPU::ldy,
             CPU::lda,
             CPU::ldx,
-            CPU::err,
+            CPU::lax,
             CPU::clv,
             CPU::lda,
             CPU::tsx,
-            CPU::err,
+            CPU::las,
             CPU::ldy,
             CPU::lda,
             CPU::ldx,
-            CPU::err,
+            CPU::lax,
             CPU::cpy,
             CPU::cmp,
             CPU::nop,
-            CPU::err,
+            CPU::dcp,
             CPU::cpy,
             CPU::cmp,
             CPU::dec,
-            CPU::err,
+            CPU::dcp,
             CPU::iny,
             CPU::cmp,
             CPU::dex,
-            CPU::err,
+            CPU::axs,
             CPU::cpy,
             CPU::cmp,
             CPU::dec,
-            CPU::err,
+            CPU::dcp,
             CPU::bne,
             CPU::cmp,
-            CPU::err,
-            CPU::err,
+            CPU::kil,
+            CPU::dcp,
             CPU::nop,
             CPU::cmp,
             CPU::dec,
-            CPU::err,
+            CPU::dcp,
             CPU::cld,
             CPU::cmp,
             CPU::nop,
-            CPU::err,
+            CPU::dcp,
             CPU::nop,
             CPU::cmp,
             CPU::dec,
-            CPU::err,
+            CPU::dcp,
             CPU::cpx,
             CPU::sbc,
             CPU::nop,
-            CPU::err,
+            CPU::isb,
             CPU::cpx,
             CPU::sbc,
             CPU::inc,
-            CPU::err,
+            CPU::isb,
             CPU::inx,
             CPU::sbc,
             CPU::nop,
@@ -1276,23 +1401,23 @@ impl<T: Mapper> CPU<T> {
             CPU::cpx,
             CPU::sbc,
             CPU::inc,
-            CPU::err,
+            CPU::isb,
             CPU::beq,
             CPU::sbc,
-            CPU::err,
-            CPU::err,
+            CPU::kil,
+            CPU::isb,
             CPU::nop,
             CPU::sbc,
             CPU::inc,
-            CPU::err,
+            CPU::isb,
             CPU::sed,
             CPU::sbc,
             CPU::nop,
-            CPU::err,
+            CPU::isb,
             CPU::nop,
             CPU::sbc,
             CPU::inc,
-            CPU::err,
+            CPU::isb,
         ]
     }
 }
@@ -1315,11 +1440,11 @@ const OP_MAP: [OP; 256] = [
     op!("BRK", Mode::Implied, 1, 7, 0),
     op!("ORA", Mode::IndexedIndirect, 2, 6, 0),
     op!("KIL", Mode::Implied, 0, 2, 0),
-    op!("SLO", Mode::IndexedIndirect, 0, 8, 0),
+    op!("SLO", Mode::IndexedIndirect, 2, 8, 0),
     op!("NOP", Mode::ZeroPage, 2, 3, 0),
     op!("ORA", Mode::ZeroPage, 2, 3, 0),
     op!("ASL", Mode::ZeroPage, 2, 5, 0),
-    op!("SLO", Mode::ZeroPage, 0, 5, 0),
+    op!("SLO", Mode::ZeroPage, 2, 5, 0),
     op!("PHP", Mode::Implied, 1, 3, 0),
     op!("ORA", Mode::Immediate, 2, 2, 0),
     op!("ASL", Mode::Accumulator, 1, 2, 0),
@@ -1327,31 +1452,31 @@ const OP_MAP: [OP; 256] = [
     op!("NOP", Mode::Absolute, 3, 4, 0),
     op!("ORA", Mode::Absolute, 3, 4, 0),
     op!("ASL", Mode::Absolute, 3, 6, 0),
-    op!("SLO", Mode::Absolute, 0, 6, 0),
+    op!("SLO", Mode::Absolute, 3, 6, 0),
     op!("BPL", Mode::Relative, 2, 2, 1),
     op!("ORA", Mode::IndirectIndexed, 2, 5, 1),
     op!("KIL", Mode::Implied, 0, 2, 0),
-    op!("SLO", Mode::IndirectIndexed, 0, 8, 0),
+    op!("SLO", Mode::IndirectIndexed, 2, 8, 0),
     op!("NOP", Mode::ZeroPageX, 2, 4, 0),
     op!("ORA", Mode::ZeroPageX, 2, 4, 0),
     op!("ASL", Mode::ZeroPageX, 2, 6, 0),
-    op!("SLO", Mode::ZeroPageX, 0, 6, 0),
+    op!("SLO", Mode::ZeroPageX, 2, 6, 0),
     op!("CLC", Mode::Implied, 1, 2, 0),
     op!("ORA", Mode::AbsoluteY, 3, 4, 1),
     op!("NOP", Mode::Implied, 1, 2, 0),
-    op!("SLO", Mode::AbsoluteY, 0, 7, 0),
+    op!("SLO", Mode::AbsoluteY, 3, 7, 0),
     op!("NOP", Mode::AbsoluteX, 3, 4, 1),
     op!("ORA", Mode::AbsoluteX, 3, 4, 1),
     op!("ASL", Mode::AbsoluteX, 3, 7, 0),
-    op!("SLO", Mode::AbsoluteX, 0, 7, 0),
+    op!("SLO", Mode::AbsoluteX, 3, 7, 0),
     op!("JSR", Mode::Absolute, 3, 6, 0),
     op!("AND", Mode::IndexedIndirect, 2, 6, 0),
     op!("KIL", Mode::Implied, 0, 2, 0),
-    op!("RLA", Mode::IndexedIndirect, 0, 8, 0),
+    op!("RLA", Mode::IndexedIndirect, 2, 8, 0),
     op!("BIT", Mode::ZeroPage, 2, 3, 0),
     op!("AND", Mode::ZeroPage, 2, 3, 0),
     op!("ROL", Mode::ZeroPage, 2, 5, 0),
-    op!("RLA", Mode::ZeroPage, 0, 5, 0),
+    op!("RLA", Mode::ZeroPage, 2, 5, 0),
     op!("PLP", Mode::Implied, 1, 4, 0),
     op!("AND", Mode::Immediate, 2, 2, 0),
     op!("ROL", Mode::Accumulator, 1, 2, 0),
@@ -1359,31 +1484,31 @@ const OP_MAP: [OP; 256] = [
     op!("BIT", Mode::Absolute, 3, 4, 0),
     op!("AND", Mode::Absolute, 3, 4, 0),
     op!("ROL", Mode::Absolute, 3, 6, 0),
-    op!("RLA", Mode::Absolute, 0, 6, 0),
+    op!("RLA", Mode::Absolute, 3, 6, 0),
     op!("BMI", Mode::Relative, 2, 2, 1),
     op!("AND", Mode::IndirectIndexed, 2, 5, 1),
     op!("KIL", Mode::Implied, 0, 2, 0),
-    op!("RLA", Mode::IndirectIndexed, 0, 8, 0),
+    op!("RLA", Mode::IndirectIndexed, 2, 8, 0),
     op!("NOP", Mode::ZeroPageX, 2, 4, 0),
     op!("AND", Mode::ZeroPageX, 2, 4, 0),
     op!("ROL", Mode::ZeroPageX, 2, 6, 0),
-    op!("RLA", Mode::ZeroPageX, 0, 6, 0),
+    op!("RLA", Mode::ZeroPageX, 2, 6, 0),
     op!("SEC", Mode::Implied, 1, 2, 0),
     op!("AND", Mode::AbsoluteY, 3, 4, 1),
     op!("NOP", Mode::Implied, 1, 2, 0),
-    op!("RLA", Mode::AbsoluteY, 0, 7, 0),
+    op!("RLA", Mode::AbsoluteY, 3, 7, 0),
     op!("NOP", Mode::AbsoluteX, 3, 4, 1),
     op!("AND", Mode::AbsoluteX, 3, 4, 1),
     op!("ROL", Mode::AbsoluteX, 3, 7, 0),
-    op!("RLA", Mode::AbsoluteX, 0, 7, 0),
+    op!("RLA", Mode::AbsoluteX, 3, 7, 0),
     op!("RTI", Mode::Implied, 1, 6, 0),
     op!("EOR", Mode::IndexedIndirect, 2, 6, 0),
     op!("KIL", Mode::Implied, 0, 2, 0),
-    op!("SRE", Mode::IndexedIndirect, 0, 8, 0),
+    op!("SRE", Mode::IndexedIndirect, 2, 8, 0),
     op!("NOP", Mode::ZeroPage, 2, 3, 0),
     op!("EOR", Mode::ZeroPage, 2, 3, 0),
     op!("LSR", Mode::ZeroPage, 2, 5, 0),
-    op!("SRE", Mode::ZeroPage, 0, 5, 0),
+    op!("SRE", Mode::ZeroPage, 2, 5, 0),
     op!("PHA", Mode::Implied, 1, 3, 0),
     op!("EOR", Mode::Immediate, 2, 2, 0),
     op!("LSR", Mode::Accumulator, 1, 2, 0),
@@ -1391,31 +1516,31 @@ const OP_MAP: [OP; 256] = [
     op!("JMP", Mode::Absolute, 3, 3, 0),
     op!("EOR", Mode::Absolute, 3, 4, 0),
     op!("LSR", Mode::Absolute, 3, 6, 0),
-    op!("SRE", Mode::Absolute, 0, 6, 0),
+    op!("SRE", Mode::Absolute, 3, 6, 0),
     op!("BVC", Mode::Relative, 2, 2, 1),
     op!("EOR", Mode::IndirectIndexed, 2, 5, 1),
     op!("KIL", Mode::Implied, 0, 2, 0),
-    op!("SRE", Mode::IndirectIndexed, 0, 8, 0),
+    op!("SRE", Mode::IndirectIndexed, 2, 8, 0),
     op!("NOP", Mode::ZeroPageX, 2, 4, 0),
     op!("EOR", Mode::ZeroPageX, 2, 4, 0),
     op!("LSR", Mode::ZeroPageX, 2, 6, 0),
-    op!("SRE", Mode::ZeroPageX, 0, 6, 0),
+    op!("SRE", Mode::ZeroPageX, 2, 6, 0),
     op!("CLI", Mode::Implied, 1, 2, 0),
     op!("EOR", Mode::AbsoluteY, 3, 4, 1),
     op!("NOP", Mode::Implied, 1, 2, 0),
-    op!("SRE", Mode::AbsoluteY, 0, 7, 0),
+    op!("SRE", Mode::AbsoluteY, 3, 7, 0),
     op!("NOP", Mode::AbsoluteX, 3, 4, 1),
     op!("EOR", Mode::AbsoluteX, 3, 4, 1),
     op!("LSR", Mode::AbsoluteX, 3, 7, 0),
-    op!("SRE", Mode::AbsoluteX, 0, 7, 0),
+    op!("SRE", Mode::AbsoluteX, 3, 7, 0),
     op!("RTS", Mode::Implied, 1, 6, 0),
     op!("ADC", Mode::IndexedIndirect, 2, 6, 0),
     op!("KIL", Mode::Implied, 0, 2, 0),
-    op!("RRA", Mode::IndexedIndirect, 0, 8, 0),
+    op!("RRA", Mode::IndexedIndirect, 2, 8, 0),
     op!("NOP", Mode::ZeroPage, 2, 3, 0),
     op!("ADC", Mode::ZeroPage, 2, 3, 0),
     op!("ROR", Mode::ZeroPage, 2, 5, 0),
-    op!("RRA", Mode::ZeroPage, 0, 5, 0),
+    op!("RRA", Mode::ZeroPage, 2, 5, 0),
     op!("PLA", Mode::Implied, 1, 4, 0),
     op!("ADC", Mode::Immediate, 2, 2, 0),
     op!("ROR", Mode::Accumulator, 1, 2, 0),
@@ -1423,31 +1548,31 @@ const OP_MAP: [OP; 256] = [
     op!("JMP", Mode::Indirect, 3, 5, 0),
     op!("ADC", Mode::Absolute, 3, 4, 0),
     op!("ROR", Mode::Absolute, 3, 6, 0),
-    op!("RRA", Mode::Absolute, 0, 6, 0),
+    op!("RRA", Mode::Absolute, 3, 6, 0),
     op!("BVS", Mode::Relative, 2, 2, 1),
     op!("ADC", Mode::IndirectIndexed, 2, 5, 1),
     op!("KIL", Mode::Implied, 0, 2, 0),
-    op!("RRA", Mode::IndirectIndexed, 0, 8, 0),
+    op!("RRA", Mode::IndirectIndexed, 2, 8, 0),
     op!("NOP", Mode::ZeroPageX, 2, 4, 0),
     op!("ADC", Mode::ZeroPageX, 2, 4, 0),
     op!("ROR", Mode::ZeroPageX, 2, 6, 0),
-    op!("RRA", Mode::ZeroPageX, 0, 6, 0),
+    op!("RRA", Mode::ZeroPageX, 2, 6, 0),
     op!("SEI", Mode::Implied, 1, 2, 0),
     op!("ADC", Mode::AbsoluteY, 3, 4, 1),
     op!("NOP", Mode::Implied, 1, 2, 0),
-    op!("RRA", Mode::AbsoluteY, 0, 7, 0),
+    op!("RRA", Mode::AbsoluteY, 3, 7, 0),
     op!("NOP", Mode::AbsoluteX, 3, 4, 1),
     op!("ADC", Mode::AbsoluteX, 3, 4, 1),
     op!("ROR", Mode::AbsoluteX, 3, 7, 0),
-    op!("RRA", Mode::AbsoluteX, 0, 7, 0),
+    op!("RRA", Mode::AbsoluteX, 3, 7, 0),
     op!("NOP", Mode::Immediate, 2, 2, 0),
     op!("STA", Mode::IndexedIndirect, 2, 6, 0),
     op!("NOP", Mode::Immediate, 0, 2, 0),
-    op!("SAX", Mode::IndexedIndirect, 0, 6, 0),
+    op!("SAX", Mode::IndexedIndirect, 2, 6, 0),
     op!("STY", Mode::ZeroPage, 2, 3, 0),
     op!("STA", Mode::ZeroPage, 2, 3, 0),
     op!("STX", Mode::ZeroPage, 2, 3, 0),
-    op!("SAX", Mode::ZeroPage, 0, 3, 0),
+    op!("SAX", Mode::ZeroPage, 2, 3, 0),
     op!("DEY", Mode::Implied, 1, 2, 0),
     op!("NOP", Mode::Immediate, 0, 2, 0),
     op!("TXA", Mode::Implied, 1, 2, 0),
@@ -1455,7 +1580,7 @@ const OP_MAP: [OP; 256] = [
     op!("STY", Mode::Absolute, 3, 4, 0),
     op!("STA", Mode::Absolute, 3, 4, 0),
     op!("STX", Mode::Absolute, 3, 4, 0),
-    op!("SAX", Mode::Absolute, 0, 4, 0),
+    op!("SAX", Mode::Absolute, 3, 4, 0),
     op!("BCC", Mode::Relative, 2, 2, 1),
     op!("STA", Mode::IndirectIndexed, 2, 6, 0),
     op!("KIL", Mode::Implied, 0, 2, 0),
@@ -1463,7 +1588,7 @@ const OP_MAP: [OP; 256] = [
     op!("STY", Mode::ZeroPageX, 2, 4, 0),
     op!("STA", Mode::ZeroPageX, 2, 4, 0),
     op!("STX", Mode::ZeroPageY, 2, 4, 0),
-    op!("SAX", Mode::ZeroPageY, 0, 4, 0),
+    op!("SAX", Mode::ZeroPageY, 2, 4, 0),
     op!("TYA", Mode::Implied, 1, 2, 0),
     op!("STA", Mode::AbsoluteY, 3, 5, 0),
     op!("TXS", Mode::Implied, 1, 2, 0),
@@ -1475,27 +1600,27 @@ const OP_MAP: [OP; 256] = [
     op!("LDY", Mode::Immediate, 2, 2, 0),
     op!("LDA", Mode::IndexedIndirect, 2, 6, 0),
     op!("LDX", Mode::Immediate, 2, 2, 0),
-    op!("LAX", Mode::IndexedIndirect, 0, 6, 0),
+    op!("LAX", Mode::IndexedIndirect, 2, 6, 0),
     op!("LDY", Mode::ZeroPage, 2, 3, 0),
     op!("LDA", Mode::ZeroPage, 2, 3, 0),
     op!("LDX", Mode::ZeroPage, 2, 3, 0),
-    op!("LAX", Mode::ZeroPage, 0, 3, 0),
+    op!("LAX", Mode::ZeroPage, 2, 3, 0),
     op!("TAY", Mode::Implied, 1, 2, 0),
     op!("LDA", Mode::Immediate, 2, 2, 0),
     op!("TAX", Mode::Implied, 1, 2, 0),
-    op!("LAX", Mode::Immediate, 0, 2, 0),
+    op!("LAX", Mode::Immediate, 2, 2, 0),
     op!("LDY", Mode::Absolute, 3, 4, 0),
     op!("LDA", Mode::Absolute, 3, 4, 0),
     op!("LDX", Mode::Absolute, 3, 4, 0),
-    op!("LAX", Mode::Absolute, 0, 4, 0),
+    op!("LAX", Mode::Absolute, 3, 4, 0),
     op!("BCS", Mode::Relative, 2, 2, 1),
     op!("LDA", Mode::IndirectIndexed, 2, 5, 1),
     op!("KIL", Mode::Implied, 0, 2, 0),
-    op!("LAX", Mode::IndirectIndexed, 0, 5, 1),
+    op!("LAX", Mode::IndirectIndexed, 2, 5, 1),
     op!("LDY", Mode::ZeroPageX, 2, 4, 0),
     op!("LDA", Mode::ZeroPageX, 2, 4, 0),
     op!("LDX", Mode::ZeroPageY, 2, 4, 0),
-    op!("LAX", Mode::ZeroPageY, 0, 4, 0),
+    op!("LAX", Mode::ZeroPageY, 2, 4, 0),
     op!("CLV", Mode::Implied, 1, 2, 0),
     op!("LDA", Mode::AbsoluteY, 3, 4, 1),
     op!("TSX", Mode::Implied, 1, 2, 0),
@@ -1503,15 +1628,15 @@ const OP_MAP: [OP; 256] = [
     op!("LDY", Mode::AbsoluteX, 3, 4, 1),
     op!("LDA", Mode::AbsoluteX, 3, 4, 1),
     op!("LDX", Mode::AbsoluteY, 3, 4, 1),
-    op!("LAX", Mode::AbsoluteY, 0, 4, 1),
+    op!("LAX", Mode::AbsoluteY, 3, 4, 1),
     op!("CPY", Mode::Immediate, 2, 2, 0),
     op!("CMP", Mode::IndexedIndirect, 2, 6, 0),
     op!("NOP", Mode::Immediate, 0, 2, 0),
-    op!("DCP", Mode::IndexedIndirect, 0, 8, 0),
+    op!("DCP", Mode::IndexedIndirect, 2, 8, 0),
     op!("CPY", Mode::ZeroPage, 2, 3, 0),
     op!("CMP", Mode::ZeroPage, 2, 3, 0),
     op!("DEC", Mode::ZeroPage, 2, 5, 0),
-    op!("DCP", Mode::ZeroPage, 0, 5, 0),
+    op!("DCP", Mode::ZeroPage, 2, 5, 0),
     op!("INY", Mode::Implied, 1, 2, 0),
     op!("CMP", Mode::Immediate, 2, 2, 0),
     op!("DEX", Mode::Implied, 1, 2, 0),
@@ -1519,53 +1644,53 @@ const OP_MAP: [OP; 256] = [
     op!("CPY", Mode::Absolute, 3, 4, 0),
     op!("CMP", Mode::Absolute, 3, 4, 0),
     op!("DEC", Mode::Absolute, 3, 6, 0),
-    op!("DCP", Mode::Absolute, 0, 6, 0),
+    op!("DCP", Mode::Absolute, 3, 6, 0),
     op!("BNE", Mode::Relative, 2, 2, 1),
     op!("CMP", Mode::IndirectIndexed, 2, 5, 1),
     op!("KIL", Mode::Implied, 0, 2, 0),
-    op!("DCP", Mode::IndirectIndexed, 0, 8, 0),
+    op!("DCP", Mode::IndirectIndexed, 2, 8, 0),
     op!("NOP", Mode::ZeroPageX, 2, 4, 0),
     op!("CMP", Mode::ZeroPageX, 2, 4, 0),
     op!("DEC", Mode::ZeroPageX, 2, 6, 0),
-    op!("DCP", Mode::ZeroPageX, 0, 6, 0),
+    op!("DCP", Mode::ZeroPageX, 2, 6, 0),
     op!("CLD", Mode::Implied, 1, 2, 0),
     op!("CMP", Mode::AbsoluteY, 3, 4, 1),
     op!("NOP", Mode::Implied, 1, 2, 0),
-    op!("DCP", Mode::AbsoluteY, 0, 7, 0),
+    op!("DCP", Mode::AbsoluteY, 3, 7, 0),
     op!("NOP", Mode::AbsoluteX, 3, 4, 1),
     op!("CMP", Mode::AbsoluteX, 3, 4, 1),
     op!("DEC", Mode::AbsoluteX, 3, 7, 0),
-    op!("DCP", Mode::AbsoluteX, 0, 7, 0),
+    op!("DCP", Mode::AbsoluteX, 3, 7, 0),
     op!("CPX", Mode::Immediate, 2, 2, 0),
     op!("SBC", Mode::IndexedIndirect, 2, 6, 0),
     op!("NOP", Mode::Immediate, 0, 2, 0),
-    op!("ISC", Mode::IndexedIndirect, 0, 8, 0),
+    op!("ISB", Mode::IndexedIndirect, 2, 8, 0),
     op!("CPX", Mode::ZeroPage, 2, 3, 0),
     op!("SBC", Mode::ZeroPage, 2, 3, 0),
     op!("INC", Mode::ZeroPage, 2, 5, 0),
-    op!("ISC", Mode::ZeroPage, 0, 5, 0),
+    op!("ISB", Mode::ZeroPage, 2, 5, 0),
     op!("INX", Mode::Implied, 1, 2, 0),
     op!("SBC", Mode::Immediate, 2, 2, 0),
     op!("NOP", Mode::Implied, 1, 2, 0),
-    op!("SBC", Mode::Immediate, 0, 2, 0),
+    op!("SBC", Mode::Immediate, 2, 2, 0),
     op!("CPX", Mode::Absolute, 3, 4, 0),
     op!("SBC", Mode::Absolute, 3, 4, 0),
     op!("INC", Mode::Absolute, 3, 6, 0),
-    op!("ISC", Mode::Absolute, 0, 6, 0),
+    op!("ISB", Mode::Absolute, 3, 6, 0),
     op!("BEQ", Mode::Relative, 2, 2, 1),
     op!("SBC", Mode::IndirectIndexed, 2, 5, 1),
     op!("KIL", Mode::Implied, 0, 2, 0),
-    op!("ISC", Mode::IndirectIndexed, 0, 8, 0),
+    op!("ISB", Mode::IndirectIndexed, 2, 8, 0),
     op!("NOP", Mode::ZeroPageX, 2, 4, 0),
     op!("SBC", Mode::ZeroPageX, 2, 4, 0),
     op!("INC", Mode::ZeroPageX, 2, 6, 0),
-    op!("ISC", Mode::ZeroPageX, 0, 6, 0),
+    op!("ISB", Mode::ZeroPageX, 2, 6, 0),
     op!("SED", Mode::Implied, 1, 2, 0),
     op!("SBC", Mode::AbsoluteY, 3, 4, 1),
     op!("NOP", Mode::Implied, 1, 2, 0),
-    op!("ISC", Mode::AbsoluteY, 0, 7, 0),
+    op!("ISB", Mode::AbsoluteY, 3, 7, 0),
     op!("NOP", Mode::AbsoluteX, 3, 4, 1),
     op!("SBC", Mode::AbsoluteX, 3, 4, 1),
     op!("INC", Mode::AbsoluteX, 3, 7, 0),
-    op!("ISC", Mode::AbsoluteX, 0, 7, 0),
+    op!("ISB", Mode::AbsoluteX, 3, 7, 0),
 ];
