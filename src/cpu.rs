@@ -189,10 +189,23 @@ impl<T: Mapper> CPU<T> {
         lo | hi << 8
     }
 
-    // FIXME: !!!
+    // FIXME
+    // operand is address
+    // addr+1 may cross page boundary, reset it to page's start address
     pub fn readbug(&self, addr: u16) -> u16 {
         let lo = self.read8(addr) as u16;
-        let hi = self.read8((addr & 0xff00) | ((addr & 0x00ff) + 1)) as u16;
+        let hi = self.read8((addr & 0xff00) | ((addr + 1) & 0x00ff)) as u16;
+
+        lo | hi << 8
+    }
+
+    // FIXME
+    // Zero Page 0x0000..=0x0100
+    // operand is zeropage address
+    pub fn readbug_zero_page(&self, addr: u16) -> u16 {
+        let lo = self.read8(addr & 0x00ff) as u16;
+        let hi = self.read8((addr + 1) & 0x00ff) as u16;
+
         lo | hi << 8
     }
 
@@ -291,9 +304,9 @@ impl<T: Mapper> CPU<T> {
 
         // TODO: PPU
         let s = format!(
-        "{:04X}  {} {} {}  {} {}\t\t\tA:{:02X} X:{:02X} Y:{:02X} P:{:02X} SP:{:02X} PPU:{:3o},{:3o} CYC:{} {:02X} {:04X}, {:?}",
+        "{:04X}  {} {} {}  {} {}\t\t\tA:{:02X} X:{:02X} Y:{:02X} P:{:02X} SP:{:02X} PPU:{:3o},{:3o} CYC:{}",
         self.PC, byte0, byte1, byte2, op.name, op_str, self.A, self.X, self.Y,
-        self.P, self.SP, 0, (self.cycles*3)%341,self.cycles, self.read8(self.addr(op.mode)), self.addr(op.mode), op.mode
+        self.P, self.SP, 0, (self.cycles*3)%341, self.cycles,
         );
         (
             s,
@@ -311,14 +324,18 @@ impl<T: Mapper> CPU<T> {
     fn addr(&self, mode: Mode) -> u16 {
         match mode {
             Mode::Absolute => self.read16(self.PC + 1),
-            Mode::AbsoluteX => self.read16(self.PC + 1) + self.X as u16,
-            Mode::AbsoluteY => self.read16(self.PC + 1) + self.Y as u16,
+            Mode::AbsoluteX => self.read16(self.PC + 1).wrapping_add(self.X as u16),
+            Mode::AbsoluteY => self.read16(self.PC + 1).wrapping_add(self.Y as u16),
             Mode::Accumulator => 0,
             Mode::Immediate => self.PC + 1,
             Mode::Implied => 0,
-            Mode::IndexedIndirect => self.readbug((self.read8(self.PC + 1) + self.X) as u16),
+            Mode::IndexedIndirect => {
+                self.readbug_zero_page(self.read8(self.PC + 1).wrapping_add(self.X) as u16)
+            }
             Mode::Indirect => self.readbug(self.read16(self.PC + 1)),
-            Mode::IndirectIndexed => self.readbug(self.read16(self.PC + 1)) + self.Y as u16,
+            Mode::IndirectIndexed => self
+                .readbug_zero_page(self.read8(self.PC + 1) as u16)
+                .wrapping_add(self.Y as u16),
             Mode::Relative => {
                 let offset = self.read8(self.PC + 1);
                 if offset < 0x80 {
@@ -328,25 +345,17 @@ impl<T: Mapper> CPU<T> {
                 }
             }
             Mode::ZeroPage => self.read8(self.PC + 1) as u16,
-            Mode::ZeroPageX => (self.read8(self.PC + 1) + self.X) as u16 & 0xff,
-            Mode::ZeroPageY => (self.read8(self.PC + 1) + self.Y) as u16 & 0xff,
+            Mode::ZeroPageX => self.read8(self.PC + 1).wrapping_add(self.X) as u16,
+            Mode::ZeroPageY => self.read8(self.PC + 1).wrapping_add(self.Y) as u16,
         }
     }
 
     fn has_crossed(&self, mode: Mode) -> bool {
-        let addr: u16;
+        let addr = self.addr(mode);
         match mode {
-            Mode::AbsoluteX => {
-                addr = self.read16(self.PC + 1) + self.X as u16;
-                self.page_diff(addr - self.X as u16, addr)
-            }
-            Mode::AbsoluteY => {
-                addr = self.read16(self.PC + 1) + self.Y as u16;
-                self.page_diff(addr - self.Y as u16, addr)
-            }
-            Mode::IndirectIndexed => {
-                addr = self.read16(self.read16(self.PC + 1)) + self.Y as u16;
-                self.page_diff(addr - self.Y as u16, addr)
+            Mode::AbsoluteX => self.page_diff(addr.wrapping_sub(self.X as u16), addr),
+            Mode::AbsoluteY | Mode::IndirectIndexed => {
+                self.page_diff(addr.wrapping_sub(self.Y as u16), addr)
             }
             _ => false,
         }
@@ -452,13 +461,16 @@ impl<T: Mapper> CPU<T> {
     }
 
     fn compare(&mut self, m: u8, n: u8) {
-        self.set_NZ((m as i16 - n as i16) as u8);
+        self.set_NZ(m.wrapping_sub(n));
         if m >= n {
             self.set_flag_to_1(F::C)
         } else {
             self.set_flag_to_0(F::C)
         }
     }
+
+    // 6502 Instruction Set
+    // https://www.masswerk.at/6502/6502_instruction_set.html
 
     // ADC Add Memory to Accumulator with Carry
     // A + M + C -> A, C
@@ -469,7 +481,7 @@ impl<T: Mapper> CPU<T> {
         let m = self.read8(info.addr);
         let c = self.get_flag(F::C);
 
-        self.A = (a as u16 + m as u16 + c as u16) as u8;
+        self.A = a.wrapping_add(m).wrapping_add(c);
         self.set_NZ(self.A);
 
         if a as u16 + m as u16 + c as u16 > 0xff {
@@ -608,7 +620,7 @@ impl<T: Mapper> CPU<T> {
     // 0 -> D
     // N Z C I D V
     // - - - - 0 -
-    fn cld(&mut self, info: &Info) {
+    fn cld(&mut self, _info: &Info) {
         self.set_flag_to_0(F::D)
     }
 
@@ -648,16 +660,22 @@ impl<T: Mapper> CPU<T> {
         self.compare(self.Y, self.read8(info.addr))
     }
 
+    // DEC Decrement Memory by One
+    // M - 1 -> M
+    // N Z C I D V
+    // + + - - - -
     fn dec(&mut self, info: &Info) {
-        unimplemented!()
+        let m = self.read8(info.addr).wrapping_sub(1);
+        self.write8(info.addr, m);
+        self.set_NZ(m)
     }
 
     // DEX Decrement Index X by One
     // X - 1 -> X
     // N Z C I D V
     // + + - - - -
-    fn dex(&mut self, info: &Info) {
-        self.X = (self.X as i16 - 1) as u8;
+    fn dex(&mut self, _info: &Info) {
+        self.X = self.X.wrapping_sub(1);
         self.set_NZ(self.X)
     }
 
@@ -665,8 +683,8 @@ impl<T: Mapper> CPU<T> {
     // Y - 1 -> Y
     // N Z C I D V
     // + + - - - -
-    fn dey(&mut self, info: &Info) {
-        self.Y = (self.Y as i16 - 1) as u8;
+    fn dey(&mut self, _info: &Info) {
+        self.Y = self.Y.wrapping_sub(1);
         self.set_NZ(self.Y)
     }
 
@@ -679,16 +697,23 @@ impl<T: Mapper> CPU<T> {
         self.A ^= m;
         self.set_NZ(self.A)
     }
+
+    // INC Increment Memory by One
+    // M + 1 -> M
+    // N Z C I D V
+    // + + - - - -
     fn inc(&mut self, info: &Info) {
-        unimplemented!()
+        let m = self.read8(info.addr).wrapping_add(1) as u8;
+        self.write8(info.addr, m);
+        self.set_NZ(m)
     }
 
     // INX Increment Index X by One
     // X + 1 -> X
     // N Z C I D V
     // + + - - - -
-    fn inx(&mut self, info: &Info) {
-        self.X = (self.X as u16 + 1) as u8;
+    fn inx(&mut self, _info: &Info) {
+        self.X = self.X.wrapping_add(1);
         self.set_NZ(self.X)
     }
 
@@ -696,8 +721,8 @@ impl<T: Mapper> CPU<T> {
     // Y + 1 -> Y
     // N Z C I D V
     // + + - - - -
-    fn iny(&mut self, info: &Info) {
-        self.Y = (self.Y as u16 + 1) as u8;
+    fn iny(&mut self, _info: &Info) {
+        self.Y = self.Y.wrapping_add(1);
         self.set_NZ(self.Y)
     }
 
@@ -772,7 +797,7 @@ impl<T: Mapper> CPU<T> {
     // NOP No Operation
     // N Z C I D V
     // - - - - - -
-    fn nop(&mut self, info: &Info) {}
+    fn nop(&mut self, _info: &Info) {}
 
     // ORA OR Memory with Accumulator
     // A OR M -> A
@@ -788,7 +813,7 @@ impl<T: Mapper> CPU<T> {
     // push A
     // N Z C I D V
     // - - - - - -
-    fn pha(&mut self, info: &Info) {
+    fn pha(&mut self, _info: &Info) {
         self.push8(self.A)
     }
 
@@ -796,14 +821,14 @@ impl<T: Mapper> CPU<T> {
     // push SR
     // N Z C I D V
     // - - - - - -
-    fn php(&mut self, info: &Info) {
+    fn php(&mut self, _info: &Info) {
         self.push8(self.P.bits | 0x10) // FIXME
     }
 
     // PLA Pull Accumulator from Stack
     // N Z C I D V
     // + + - - - -
-    fn pla(&mut self, info: &Info) {
+    fn pla(&mut self, _info: &Info) {
         self.A = self.pull8();
         self.set_NZ(self.A)
     }
@@ -812,7 +837,7 @@ impl<T: Mapper> CPU<T> {
     // pull SR
     // N Z C I D V
     // from stack
-    fn plp(&mut self, info: &Info) {
+    fn plp(&mut self, _info: &Info) {
         self.P = F::from_bits(self.pull8() & 0xef | 0x20).unwrap()
     }
 
@@ -821,7 +846,22 @@ impl<T: Mapper> CPU<T> {
     // N Z C I D V
     // + + + - - -
     fn rol(&mut self, info: &Info) {
-        unimplemented!()
+        match info.mode {
+            Mode::Accumulator => {
+                let c = self.get_flag(F::C);
+                self.set_flag(F::C, (self.A >> 7) & 0x01);
+                self.A = (self.A << 1) | c;
+                self.set_NZ(self.A)
+            }
+            _ => {
+                let mut m = self.read8(info.addr);
+                let c = self.get_flag(F::C);
+                self.set_flag(F::C, (m >> 7) & 0x01);
+                m = (m << 1) | c;
+                self.write8(info.addr, m);
+                self.set_NZ(m)
+            }
+        }
     }
 
     // ROR Rotate One Bit Right (Memory or Accumulator)
@@ -833,14 +873,14 @@ impl<T: Mapper> CPU<T> {
             Mode::Accumulator => {
                 let c = self.get_flag(F::C);
                 self.set_flag(F::C, self.A & 0x01);
-                self.A = (self.A >> 1)|(c<<7);
+                self.A = (self.A >> 1) | (c << 7);
                 self.set_NZ(self.A)
             }
             _ => {
                 let mut m = self.read8(info.addr);
                 let c = self.get_flag(F::C);
                 self.set_flag(F::C, m & 0x01);
-                m = (m>>1)|(c<<7);
+                m = (m >> 1) | (c << 7);
                 self.write8(info.addr, m);
                 self.set_NZ(m)
             }
@@ -860,7 +900,7 @@ impl<T: Mapper> CPU<T> {
     // pull PC, PC+1 -> PC
     // N Z C I D V
     // - - - - - -
-    fn rts(&mut self, info: &Info) {
+    fn rts(&mut self, _info: &Info) {
         self.PC = self.pull16() + 1
     }
 
@@ -874,7 +914,7 @@ impl<T: Mapper> CPU<T> {
         let m = self.read8(info.addr);
         let c = self.get_flag(F::C);
 
-        self.A = (a as i16 - m as i16 - (1 - c) as i16) as u8;
+        self.A = a.wrapping_sub(m).wrapping_sub(1 - c);
         self.set_NZ(self.A);
 
         if a as i16 - m as i16 - (1 - c) as i16 >= 0 {
@@ -894,7 +934,7 @@ impl<T: Mapper> CPU<T> {
     // 1 -> C
     // N Z C I D V
     // - - 1 - - -
-    fn sec(&mut self, info: &Info) {
+    fn sec(&mut self, _info: &Info) {
         self.set_flag_to_1(F::C)
     }
 
@@ -902,7 +942,7 @@ impl<T: Mapper> CPU<T> {
     // 1 -> D
     // N Z C I D V
     // - - - - 1 -
-    fn sed(&mut self, info: &Info) {
+    fn sed(&mut self, _info: &Info) {
         self.set_flag_to_1(F::D)
     }
 
@@ -910,7 +950,7 @@ impl<T: Mapper> CPU<T> {
     // 1 -> I
     // N Z C I D V
     // - - - 1 - -
-    fn sei(&mut self, info: &Info) {
+    fn sei(&mut self, _info: &Info) {
         self.set_flag_to_1(F::I)
     }
 
@@ -930,15 +970,19 @@ impl<T: Mapper> CPU<T> {
         self.write8(info.addr, self.X)
     }
 
+    // STY Sore Index Y in Memory
+    // Y -> M
+    // N Z C I D V
+    // - - - - - -
     fn sty(&mut self, info: &Info) {
-        unimplemented!()
+        self.write8(info.addr, self.Y)
     }
 
     // TAX Transfer Accumulator to Index X
     // A -> X
     // N Z C I D V
     // + + - - - -
-    fn tax(&mut self, info: &Info) {
+    fn tax(&mut self, _info: &Info) {
         self.X = self.A;
         self.set_NZ(self.X)
     }
@@ -947,7 +991,7 @@ impl<T: Mapper> CPU<T> {
     // A -> Y
     // N Z C I D V
     // + + - - - -
-    fn tay(&mut self, info: &Info) {
+    fn tay(&mut self, _info: &Info) {
         self.Y = self.A;
         self.set_NZ(self.Y)
     }
@@ -956,7 +1000,7 @@ impl<T: Mapper> CPU<T> {
     // SP -> X
     // N Z C I D V
     // + + - - - -
-    fn tsx(&mut self, info: &Info) {
+    fn tsx(&mut self, _info: &Info) {
         self.X = self.SP;
         self.set_NZ(self.X)
     }
@@ -965,7 +1009,7 @@ impl<T: Mapper> CPU<T> {
     // X -> A
     // N Z C I D V
     // + + - - - -
-    fn txa(&mut self, info: &Info) {
+    fn txa(&mut self, _info: &Info) {
         self.A = self.X;
         self.set_NZ(self.A)
     }
@@ -974,7 +1018,7 @@ impl<T: Mapper> CPU<T> {
     // X -> SP
     // N Z C I D V
     // - - - - - -
-    fn txs(&mut self, info: &Info) {
+    fn txs(&mut self, _info: &Info) {
         self.SP = self.X
     }
 
@@ -982,7 +1026,7 @@ impl<T: Mapper> CPU<T> {
     // Y -> A
     // N Z C I D V
     // + + - - - -
-    fn tya(&mut self, info: &Info) {
+    fn tya(&mut self, _info: &Info) {
         self.A = self.Y;
         self.set_NZ(self.A)
     }
