@@ -22,13 +22,13 @@ pub trait Mapper {
 // 16 KB PRG-ROM bank number to load into $8000 directly
 // $8000 ~ $BFFF -> First 16 KB of ROM
 // $C000 ~ $FFFF -> Last 16 KB of ROM (NROM-256) or mirror of $8000-$BFFF (NROM-128)
-pub struct Mapper0<'a> {
-    cartridge: &'a mut Cartridge,
+pub struct Mapper0 {
+    cartridge: Cartridge,
     is_unrom256: bool,
 }
 
-impl<'a> Mapper0<'a> {
-    pub fn new(cartridge: &'a mut Cartridge) -> Self {
+impl Mapper0 {
+    pub fn new(cartridge: Cartridge) -> Self {
         let is_unrom256 = cartridge.prg.len() / (1 << 10) > 16;
         Mapper0 {
             cartridge,
@@ -37,7 +37,7 @@ impl<'a> Mapper0<'a> {
     }
 }
 
-impl<'a> Mapper for Mapper0<'a> {
+impl Mapper for Mapper0 {
     fn read(&self, addr: u16) -> u8 {
         match addr {
             0x6000..=0x7fff => self.cartridge.sram[addr as usize - 0x6000],

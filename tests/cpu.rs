@@ -22,7 +22,7 @@ struct Status {
 fn mapper0() {
     let path = Path::new("tests/fixture/nestest.nes");
     let mut cartridge = Cartridge::new(path).unwrap();
-    let mapper0 = Mapper0::new(&mut cartridge);
+    let mapper0 = Mapper0::new(cartridge);
     let cpu = CPU::new(mapper0);
 
     assert_eq!(0xc5af, cpu.nmi());
@@ -34,7 +34,7 @@ fn mapper0() {
 fn run() {
     let path = Path::new("tests/fixture/nestest.nes");
     let mut cartridge = Cartridge::new(path).unwrap();
-    let mapper0 = Mapper0::new(&mut cartridge);
+    let mapper0 = Mapper0::new(cartridge);
     let mut cpu = CPU::new(mapper0);
 
     let mut i = 1;
