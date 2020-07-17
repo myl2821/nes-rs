@@ -1,23 +1,29 @@
-use crate::{Mapper, Result};
+use crate::Mapper;
 
 const VERCTOR_NMI: u16 = 0xFFFA;
 const VERCTOR_RST: u16 = 0xFFFC;
 const VERCTOR_IRQ: u16 = 0xFFFE;
 
-// Carry Flag (C)
-const C_F: u8 = 0x01;
-// Zero Flag (Z)
-const Z_F: u8 = 0x02;
-// Interrupt Disable (I)
-const I_F: u8 = 0x04;
-// Decimal Mode (D)
-const D_F: u8 = 0x08;
-// Break Command (B)
-const B_F: u8 = 0x10;
-// Overflow Flag (V)
-const V_F: u8 = 0x40;
-// Negative Flag (N)
-const N_F: u8 = 0x80;
+bitflags! {
+    struct F: u8 {
+        // Carry Flag (C)
+        const C = 0x01;
+        // Zero Flag (Z)
+        const Z = 0x02;
+        // Interrupt Disable (I)
+        const I = 0x04;
+        // Decimal Mode (D)
+        const D = 0x08;
+        // Break Command (B)
+        const B = 0x10;
+        // Unused Bit (U)
+        const U = 0x20;
+        // Overflow Flag (V)
+        const V = 0x40;
+        // Negative Flag (N)
+        const N = 0x80;
+    }
+}
 
 pub struct CPU<T: Mapper> {
     // Memory mapper
@@ -46,16 +52,17 @@ pub struct CPU<T: Mapper> {
     // Interrupt Disable (I)
     // Decimal Mode (D)
     // Break Command (B)
+    // Unused Bit (U)
     // Overflow Flag (V)
     // Negative Flag (N)
     // Status register layout
     // ---------------------------------
     //   7 | 6 | 5 | 4 | 3 | 2 | 1 | 0
-    //   N | V |   | B | D | I | Z | C
-    P: u8,
+    //   N | V | U | B | D | I | Z | C
+    P: F,
 
     // Instruction function table
-    ins: [fn(&mut CPU<T>, &info); 256],
+    ins: [fn(&mut CPU<T>, &Info); 256],
 
     cycles: u64,
 }
@@ -111,7 +118,7 @@ pub struct OP<'a> {
     page_cycle: u64,
 }
 
-struct info {
+struct Info {
     addr: u16,
     pc: u16,
     mode: Mode,
@@ -139,7 +146,7 @@ impl<T: Mapper> CPU<T> {
             A: 0x00,
             X: 0x00,
             Y: 0x00,
-            P: 0x00,
+            P: F::empty(),
             ins: [CPU::jmp; 256],
             cycles: 0,
         };
@@ -182,6 +189,13 @@ impl<T: Mapper> CPU<T> {
         lo | hi << 8
     }
 
+    // FIXME: !!!
+    pub fn readbug(&self, addr: u16) -> u16 {
+        let lo = self.read8(addr) as u16;
+        let hi = self.read8((addr & 0xff00) | ((addr & 0x00ff) + 1)) as u16;
+        lo | hi << 8
+    }
+
     pub fn nmi(&self) -> u16 {
         self.read16(VERCTOR_NMI)
     }
@@ -197,7 +211,7 @@ impl<T: Mapper> CPU<T> {
     pub fn reset(&mut self) {
         self.PC = self.rst();
         self.SP = 0xfd;
-        self.P = 0x24;
+        self.P.insert(F::U | F::I);
         self.cycles = 0;
     }
 
@@ -230,7 +244,7 @@ impl<T: Mapper> CPU<T> {
 
         self.PC += op.len;
 
-        let info = info {
+        let info = Info {
             addr: addr,
             pc: self.PC,
             mode: op.mode,
@@ -277,9 +291,9 @@ impl<T: Mapper> CPU<T> {
 
         // TODO: PPU
         let s = format!(
-        "{:04X}  {} {} {}  {} {}\t\t\tA:{:02X} X:{:02X} Y:{:02X} P:{:02X} SP:{:02X} PPU:{:3o},{:3o} CYC:{}",
+        "{:04X}  {} {} {}  {} {}\t\t\tA:{:02X} X:{:02X} Y:{:02X} P:{:02X} SP:{:02X} PPU:{:3o},{:3o} CYC:{} {:02X} {:04X}, {:?}",
         self.PC, byte0, byte1, byte2, op.name, op_str, self.A, self.X, self.Y,
-        self.P, self.SP, 0, (self.cycles*3)%341,self.cycles
+        self.P, self.SP, 0, (self.cycles*3)%341,self.cycles, self.read8(self.addr(op.mode)), self.addr(op.mode), op.mode
         );
         (
             s,
@@ -288,7 +302,7 @@ impl<T: Mapper> CPU<T> {
             self.A,
             self.X,
             self.Y,
-            self.P,
+            self.P.bits,
             self.SP,
             self.cycles,
         )
@@ -302,9 +316,9 @@ impl<T: Mapper> CPU<T> {
             Mode::Accumulator => 0,
             Mode::Immediate => self.PC + 1,
             Mode::Implied => 0,
-            Mode::IndexedIndirect => self.read16((self.read8(self.PC + 1) + self.X) as u16),
-            Mode::Indirect => self.read16(self.read16(self.PC + 1)),
-            Mode::IndirectIndexed => self.read16(self.read16(self.PC + 1)) + self.Y as u16,
+            Mode::IndexedIndirect => self.readbug((self.read8(self.PC + 1) + self.X) as u16),
+            Mode::Indirect => self.readbug(self.read16(self.PC + 1)),
+            Mode::IndirectIndexed => self.readbug(self.read16(self.PC + 1)) + self.Y as u16,
             Mode::Relative => {
                 let offset = self.read8(self.PC + 1);
                 if offset < 0x80 {
@@ -346,40 +360,54 @@ impl<T: Mapper> CPU<T> {
 
     // add 1 to cycles if branch occurs on same page
     // add 2 to cycles if branch occurs to different page
-    fn add_branch_cycle(&mut self, info: &info) {
+    fn add_branch_cycle(&mut self, info: &Info) {
         self.cycles += 1;
         if self.page_diff(self.PC, info.addr) {
             self.cycles += 1
         }
     }
 
-    fn is_flag_0(&self, f: u8) -> bool {
-        self.P & f == 0x00
+    fn is_flag_0(&self, f: F) -> bool {
+        !self.P.contains(f)
     }
 
-    fn is_flag_1(&self, f: u8) -> bool {
-        !self.is_flag_0(f)
+    fn is_flag_1(&self, f: F) -> bool {
+        self.P.contains(f)
     }
 
-    fn set_flag_to_0(&mut self, f: u8) {
-        self.P &= !f
+    fn set_flag_to_0(&mut self, f: F) {
+        self.P.remove(f)
     }
 
-    fn set_flag_to_1(&mut self, f: u8) {
-        self.P |= f
+    fn set_flag_to_1(&mut self, f: F) {
+        self.P.insert(f)
+    }
+
+    fn get_flag(&mut self, f: F) -> u8 {
+        match self.is_flag_0(f) {
+            true => 0,
+            _ => 1,
+        }
+    }
+
+    fn set_flag(&mut self, f: F, v: u8) {
+        match v {
+            0x00 => self.set_flag_to_0(f),
+            _ => self.set_flag_to_1(f),
+        }
     }
 
     fn set_Z(&mut self, v: u8) {
         match v {
-            0x00 => self.set_flag_to_1(Z_F),
-            _ => self.set_flag_to_0(Z_F),
+            0x00 => self.set_flag_to_1(F::Z),
+            _ => self.set_flag_to_0(F::Z),
         }
     }
 
     fn set_N(&mut self, v: u8) {
-        match v & N_F {
-            0x00 => self.set_flag_to_0(N_F),
-            _ => self.set_flag_to_1(N_F),
+        match v & F::N.bits {
+            0x00 => self.set_flag_to_0(F::N),
+            _ => self.set_flag_to_1(F::N),
         }
     }
 
@@ -394,130 +422,283 @@ impl<T: Mapper> CPU<T> {
     // decremented and when a byte is pulled from the stack, the stack pointer is
     // incremented. There is no detection of stack overflow and the stack pointer
     // will just wrap around from $00 to $FF.
-    fn push(&mut self, v: u8) {
+    fn push8(&mut self, v: u8) {
         self.write8(0x0100 | self.SP as u16, v);
         self.SP -= 1
     }
 
-    fn pull(&mut self) -> u8 {
+    fn pull8(&mut self) -> u8 {
         self.SP += 1;
         self.read8(0x0100 | self.SP as u16)
     }
 
     fn push16(&mut self, v: u16) {
-        self.push((v >> 8) as u8);
-        self.push(v as u8)
+        self.push8((v >> 8) as u8);
+        self.push8(v as u8)
     }
 
     fn pull16(&mut self) -> u16 {
-        let l = self.pull() as u16;
-        let h = self.pull() as u16;
+        let l = self.pull8() as u16;
+        let h = self.pull8() as u16;
         h << 8 | l
     }
 
-    fn adc(&mut self, info: &info) {
-        unimplemented!()
+    // Branch on condition
+    fn branch_on(&mut self, condition: bool, info: &Info) {
+        if condition {
+            self.PC = info.addr;
+            self.add_branch_cycle(info)
+        }
     }
-    fn and(&mut self, info: &info) {
-        unimplemented!()
+
+    fn compare(&mut self, m: u8, n: u8) {
+        self.set_NZ((m as i16 - n as i16) as u8);
+        if m >= n {
+            self.set_flag_to_1(F::C)
+        } else {
+            self.set_flag_to_0(F::C)
+        }
     }
-    fn asl(&mut self, info: &info) {
-        unimplemented!()
+
+    // ADC Add Memory to Accumulator with Carry
+    // A + M + C -> A, C
+    // N Z C I D V
+    // + + + - - +
+    fn adc(&mut self, info: &Info) {
+        let a = self.A;
+        let m = self.read8(info.addr);
+        let c = self.get_flag(F::C);
+
+        self.A = (a as u16 + m as u16 + c as u16) as u8;
+        self.set_NZ(self.A);
+
+        if a as u16 + m as u16 + c as u16 > 0xff {
+            self.set_flag_to_1(F::C)
+        } else {
+            self.set_flag_to_0(F::C)
+        }
+
+        if ((a ^ m) >> 7) & 1 == 0 && ((a ^ self.A) >> 7) & 1 != 0 {
+            self.set_flag_to_1(F::V)
+        } else {
+            self.set_flag_to_0(F::V)
+        }
+    }
+
+    // AND AND Memory with Accumulator
+    // A AND M -> A
+    // N Z C I D V
+    // + + - - - -
+    fn and(&mut self, info: &Info) {
+        self.A &= self.read8(info.addr);
+        self.set_NZ(self.A)
+    }
+
+    // ASL Shift Left One Bit (Memory or Accumulator)
+    // C <- [76543210] <- 0
+    // N Z C I D V
+    // + + + - - -
+    fn asl(&mut self, info: &Info) {
+        match info.mode {
+            Mode::Accumulator => {
+                self.set_flag(F::C, (self.A >> 7) & 0x01);
+                self.A <<= 1;
+                self.set_NZ(self.A)
+            }
+            _ => {
+                let mut m = self.read8(info.addr);
+                self.set_flag(F::C, (m >> 7) & 0x01);
+                m <<= 1;
+                self.write8(info.addr, m);
+                self.set_NZ(m)
+            }
+        }
     }
 
     // BCC Branch on Carry Clear
     // branch on C = 0
     // N Z C I D V
     // - - - - - -
-    fn bcc(&mut self, info: &info) {
-        if self.is_flag_0(C_F) {
-            self.PC = info.addr;
-            self.add_branch_cycle(info)
-        }
+    fn bcc(&mut self, info: &Info) {
+        self.branch_on(self.is_flag_0(F::C), info)
     }
 
     // BCS Branch on Carry Set
     // branch on C = 1
     // N Z C I D V
     // - - - - - -
-    fn bcs(&mut self, info: &info) {
-        if self.is_flag_1(C_F) {
-            self.PC = info.addr;
-            self.add_branch_cycle(info)
-        }
+    fn bcs(&mut self, info: &Info) {
+        self.branch_on(self.is_flag_1(F::C), info)
     }
 
-    fn beq(&mut self, info: &info) {
+    // BEQ Branch on Result Zero
+    // branch on Z = 1
+    // N Z C I D V
+    // - - - - - -
+    fn beq(&mut self, info: &Info) {
+        self.branch_on(self.is_flag_1(F::Z), info)
+    }
+
+    // BIT Test Bits in Memory with Accumulator
+    // bits 7 and 6 of operand are transfered to bit 7 and 6 of SR (N,V);
+    // the zeroflag is set to the result of operand AND accumulator.
+    // A AND M, M7 -> N, M6 -> V
+    //  N Z C I D V
+    // M7 + - - - M6
+    fn bit(&mut self, info: &Info) {
+        let m = self.read8(info.addr);
+        self.set_Z(self.A & m);
+        self.set_N(m);
+        self.set_flag(F::V, (m >> 6) & 0x01)
+    }
+
+    // BMI Branch on Result Minus
+    // branch on N = 1
+    // N Z C I D V
+    // - - - - - -
+    fn bmi(&mut self, info: &Info) {
+        self.branch_on(self.is_flag_1(F::N), info)
+    }
+
+    // Branch on Result not Zero
+    // branch on Z = 0
+    // N Z C I D V
+    // - - - - - -
+    fn bne(&mut self, info: &Info) {
+        self.branch_on(self.is_flag_0(F::Z), info)
+    }
+
+    // BPL Branch on Result Plus
+    // branch on N = 0
+    // N Z C I D V
+    // - - - - - -
+    fn bpl(&mut self, info: &Info) {
+        self.branch_on(self.is_flag_0(F::N), info)
+    }
+
+    fn brk(&mut self, info: &Info) {
         unimplemented!()
     }
-    fn bit(&mut self, info: &info) {
-        unimplemented!()
+
+    // BVC Branch on Overflow Clear
+    // branch on V = 0
+    // N Z C I D V
+    // - - - - - -
+    fn bvc(&mut self, info: &Info) {
+        self.branch_on(self.is_flag_0(F::V), info)
     }
-    fn bmi(&mut self, info: &info) {
-        unimplemented!()
-    }
-    fn bne(&mut self, info: &info) {
-        unimplemented!()
-    }
-    fn bpl(&mut self, info: &info) {
-        unimplemented!()
-    }
-    fn brk(&mut self, info: &info) {
-        unimplemented!()
-    }
-    fn bvc(&mut self, info: &info) {
-        unimplemented!()
-    }
-    fn bvs(&mut self, info: &info) {
-        unimplemented!()
+
+    // BVS Branch on Overflow Set
+    // branch on V = 1
+    // N Z C I D V
+    // - - - - - -
+    fn bvs(&mut self, info: &Info) {
+        self.branch_on(self.is_flag_1(F::V), info)
     }
 
     // CLC Clear Carry Flag
     // 0 -> C
     // N Z C I D V
     // - - 0 - - -
-    fn clc(&mut self, info: &info) {
-        self.set_flag_to_0(C_F)
+    fn clc(&mut self, _info: &Info) {
+        self.set_flag_to_0(F::C)
     }
 
-    fn cld(&mut self, info: &info) {
+    // CLD Clear Decimal Mode
+    // 0 -> D
+    // N Z C I D V
+    // - - - - 0 -
+    fn cld(&mut self, info: &Info) {
+        self.set_flag_to_0(F::D)
+    }
+
+    fn cli(&mut self, info: &Info) {
         unimplemented!()
     }
-    fn cli(&mut self, info: &info) {
+
+    // CLV Clear Overflow Flag
+    // 0 -> V
+    // N Z C I D V
+    // - - - - - 0
+    fn clv(&mut self, _info: &Info) {
+        self.set_flag_to_0(F::V)
+    }
+
+    // CMP Compare Memory with Accumulator
+    // A - M
+    // N Z C I D V
+    // + + + - - -
+    fn cmp(&mut self, info: &Info) {
+        self.compare(self.A, self.read8(info.addr))
+    }
+
+    // CPX Compare Memory and Index X
+    // X - M
+    // N Z C I D V
+    // + + + - - -
+    fn cpx(&mut self, info: &Info) {
+        self.compare(self.X, self.read8(info.addr))
+    }
+
+    // CPY Compare Memory and Index Y
+    // Y - M
+    // N Z C I D V
+    // + + + - - -
+    fn cpy(&mut self, info: &Info) {
+        self.compare(self.Y, self.read8(info.addr))
+    }
+
+    fn dec(&mut self, info: &Info) {
         unimplemented!()
     }
-    fn clv(&mut self, info: &info) {
+
+    // DEX Decrement Index X by One
+    // X - 1 -> X
+    // N Z C I D V
+    // + + - - - -
+    fn dex(&mut self, info: &Info) {
+        self.X = (self.X as i16 - 1) as u8;
+        self.set_NZ(self.X)
+    }
+
+    // DEY Decrement Index Y by One
+    // Y - 1 -> Y
+    // N Z C I D V
+    // + + - - - -
+    fn dey(&mut self, info: &Info) {
+        self.Y = (self.Y as i16 - 1) as u8;
+        self.set_NZ(self.Y)
+    }
+
+    // EOR Exclusive-OR Memory with Accumulator
+    // A EOR M -> A
+    // N Z C I D V
+    // + + - - - -
+    fn eor(&mut self, info: &Info) {
+        let m = self.read8(info.addr);
+        self.A ^= m;
+        self.set_NZ(self.A)
+    }
+    fn inc(&mut self, info: &Info) {
         unimplemented!()
     }
-    fn cmp(&mut self, info: &info) {
-        unimplemented!()
+
+    // INX Increment Index X by One
+    // X + 1 -> X
+    // N Z C I D V
+    // + + - - - -
+    fn inx(&mut self, info: &Info) {
+        self.X = (self.X as u16 + 1) as u8;
+        self.set_NZ(self.X)
     }
-    fn cpx(&mut self, info: &info) {
-        unimplemented!()
-    }
-    fn cpy(&mut self, info: &info) {
-        unimplemented!()
-    }
-    fn dec(&mut self, info: &info) {
-        unimplemented!()
-    }
-    fn dex(&mut self, info: &info) {
-        unimplemented!()
-    }
-    fn dey(&mut self, info: &info) {
-        unimplemented!()
-    }
-    fn eor(&mut self, info: &info) {
-        unimplemented!()
-    }
-    fn inc(&mut self, info: &info) {
-        unimplemented!()
-    }
-    fn inx(&mut self, info: &info) {
-        unimplemented!()
-    }
-    fn iny(&mut self, info: &info) {
-        unimplemented!()
+
+    // INY Increment Index Y by One
+    // Y + 1 -> Y
+    // N Z C I D V
+    // + + - - - -
+    fn iny(&mut self, info: &Info) {
+        self.Y = (self.Y as u16 + 1) as u8;
+        self.set_NZ(self.Y)
     }
 
     // JMP - Jump to New Location
@@ -525,7 +706,7 @@ impl<T: Mapper> CPU<T> {
     // (PC+2) -> PCH
     // N Z C I D V
     // - - - - - -
-    fn jmp(&mut self, info: &info) {
+    fn jmp(&mut self, info: &Info) {
         self.PC = info.addr
     }
 
@@ -535,7 +716,7 @@ impl<T: Mapper> CPU<T> {
     // (PC+2) -> PCH
     // N Z C I D V
     // - - - - - -
-    fn jsr(&mut self, info: &info) {
+    fn jsr(&mut self, info: &Info) {
         self.push16(self.PC - 1);
         self.PC = info.addr
     }
@@ -544,7 +725,7 @@ impl<T: Mapper> CPU<T> {
     // M -> A
     // N Z C I D V
     // + + - - - -
-    fn lda(&mut self, info: &info) {
+    fn lda(&mut self, info: &Info) {
         self.A = self.read8(info.addr);
         self.set_NZ(self.A)
     }
@@ -553,102 +734,260 @@ impl<T: Mapper> CPU<T> {
     // M -> X
     // N Z C I D V
     // + + - - - -
-    fn ldx(&mut self, info: &info) {
+    fn ldx(&mut self, info: &Info) {
         self.X = self.read8(info.addr);
         self.set_NZ(self.X)
     }
 
-    fn ldy(&mut self, info: &info) {
-        unimplemented!()
+    // LDY Load Index Y with Memory
+    // M -> Y
+    // N Z C I D V
+    // + + - - - -
+    fn ldy(&mut self, info: &Info) {
+        self.Y = self.read8(info.addr);
+        self.set_NZ(self.Y)
     }
-    fn lsr(&mut self, info: &info) {
-        unimplemented!()
+
+    // LSR Shift One Bit Right (Memory or Accumulator)
+    // 0 -> [76543210] -> C
+    // N Z C I D V
+    // 0 + + - - -
+    fn lsr(&mut self, info: &Info) {
+        match info.mode {
+            Mode::Accumulator => {
+                self.set_flag(F::C, self.A & 0x01);
+                self.A >>= 1;
+                self.set_NZ(self.A)
+            }
+            _ => {
+                let mut m = self.read8(info.addr);
+                self.set_flag(F::C, m & 0x01);
+                m >>= 1;
+                self.write8(info.addr, m);
+                self.set_NZ(m)
+            }
+        }
     }
 
     // NOP No Operation
     // N Z C I D V
     // - - - - - -
-    fn nop(&mut self, info: &info) {}
+    fn nop(&mut self, info: &Info) {}
 
-    fn ora(&mut self, info: &info) {
+    // ORA OR Memory with Accumulator
+    // A OR M -> A
+    // N Z C I D V
+    // + + - - - -
+    fn ora(&mut self, info: &Info) {
+        let m = self.read8(info.addr);
+        self.A |= m;
+        self.set_NZ(self.A)
+    }
+
+    // PHA Push Accumulator on Stack
+    // push A
+    // N Z C I D V
+    // - - - - - -
+    fn pha(&mut self, info: &Info) {
+        self.push8(self.A)
+    }
+
+    // PHP Push Processor Status on Stack
+    // push SR
+    // N Z C I D V
+    // - - - - - -
+    fn php(&mut self, info: &Info) {
+        self.push8(self.P.bits | 0x10) // FIXME
+    }
+
+    // PLA Pull Accumulator from Stack
+    // N Z C I D V
+    // + + - - - -
+    fn pla(&mut self, info: &Info) {
+        self.A = self.pull8();
+        self.set_NZ(self.A)
+    }
+
+    // PLP Pull Processor Status from Stack
+    // pull SR
+    // N Z C I D V
+    // from stack
+    fn plp(&mut self, info: &Info) {
+        self.P = F::from_bits(self.pull8() & 0xef | 0x20).unwrap()
+    }
+
+    // ROL Rotate One Bit Left (Memory or Accumulator)
+    // C <- [76543210] <- C
+    // N Z C I D V
+    // + + + - - -
+    fn rol(&mut self, info: &Info) {
         unimplemented!()
     }
-    fn pha(&mut self, info: &info) {
-        unimplemented!()
+
+    // ROR Rotate One Bit Right (Memory or Accumulator)
+    // C -> [76543210] -> C
+    // N Z C I D V
+    // + + + - - -
+    fn ror(&mut self, info: &Info) {
+        match info.mode {
+            Mode::Accumulator => {
+                let c = self.get_flag(F::C);
+                self.set_flag(F::C, self.A & 0x01);
+                self.A = (self.A >> 1)|(c<<7);
+                self.set_NZ(self.A)
+            }
+            _ => {
+                let mut m = self.read8(info.addr);
+                let c = self.get_flag(F::C);
+                self.set_flag(F::C, m & 0x01);
+                m = (m>>1)|(c<<7);
+                self.write8(info.addr, m);
+                self.set_NZ(m)
+            }
+        }
     }
-    fn php(&mut self, info: &info) {
-        unimplemented!()
+
+    // RTI Return from Interrupt
+    // pull SR, pull PC
+    // N Z C I D V
+    // from stack
+    fn rti(&mut self, info: &Info) {
+        self.plp(info);
+        self.PC = self.pull16()
     }
-    fn pla(&mut self, info: &info) {
-        unimplemented!()
+
+    // RTS Return from Subroutine
+    // pull PC, PC+1 -> PC
+    // N Z C I D V
+    // - - - - - -
+    fn rts(&mut self, info: &Info) {
+        self.PC = self.pull16() + 1
     }
-    fn plp(&mut self, info: &info) {
-        unimplemented!()
-    }
-    fn rol(&mut self, info: &info) {
-        unimplemented!()
-    }
-    fn ror(&mut self, info: &info) {
-        unimplemented!()
-    }
-    fn rti(&mut self, info: &info) {
-        unimplemented!()
-    }
-    fn rts(&mut self, info: &info) {
-        unimplemented!()
-    }
-    fn sbc(&mut self, info: &info) {
-        unimplemented!()
+
+    // SBC Subtract Memory from Accumulator with Borrow
+    //         _
+    // A - M - C -> A
+    // N Z C I D V
+    // + + + - - +
+    fn sbc(&mut self, info: &Info) {
+        let a = self.A;
+        let m = self.read8(info.addr);
+        let c = self.get_flag(F::C);
+
+        self.A = (a as i16 - m as i16 - (1 - c) as i16) as u8;
+        self.set_NZ(self.A);
+
+        if a as i16 - m as i16 - (1 - c) as i16 >= 0 {
+            self.set_flag_to_1(F::C)
+        } else {
+            self.set_flag_to_0(F::C)
+        }
+
+        if ((a ^ m) >> 7) & 1 != 0 && ((a ^ self.A) >> 7) & 1 != 0 {
+            self.set_flag_to_1(F::V)
+        } else {
+            self.set_flag_to_0(F::V)
+        }
     }
 
     // SEC Set Carry Flag
     // 1 -> C
     // N Z C I D V
     // - - 1 - - -
-    fn sec(&mut self, info: &info) {
-        self.set_flag_to_1(C_F)
+    fn sec(&mut self, info: &Info) {
+        self.set_flag_to_1(F::C)
     }
 
-    fn sed(&mut self, info: &info) {
-        unimplemented!()
+    // SED Set Decimal Flag
+    // 1 -> D
+    // N Z C I D V
+    // - - - - 1 -
+    fn sed(&mut self, info: &Info) {
+        self.set_flag_to_1(F::D)
     }
-    fn sei(&mut self, info: &info) {
-        unimplemented!()
+
+    // SEI Set Interrupt Disable Status
+    // 1 -> I
+    // N Z C I D V
+    // - - - 1 - -
+    fn sei(&mut self, info: &Info) {
+        self.set_flag_to_1(F::I)
     }
-    fn sta(&mut self, info: &info) {
-        unimplemented!()
+
+    // TA Store Accumulator in Memory
+    // A -> M
+    // N Z C I D V
+    // - - - - - -
+    fn sta(&mut self, info: &Info) {
+        self.write8(info.addr, self.A)
     }
 
     // STX Store Index X in Memory
     // X -> M
     // N Z C I D V
     // - - - - - -
-    fn stx(&mut self, info: &info) {
+    fn stx(&mut self, info: &Info) {
         self.write8(info.addr, self.X)
     }
 
-    fn sty(&mut self, info: &info) {
+    fn sty(&mut self, info: &Info) {
         unimplemented!()
     }
-    fn tax(&mut self, info: &info) {
-        unimplemented!()
+
+    // TAX Transfer Accumulator to Index X
+    // A -> X
+    // N Z C I D V
+    // + + - - - -
+    fn tax(&mut self, info: &Info) {
+        self.X = self.A;
+        self.set_NZ(self.X)
     }
-    fn tay(&mut self, info: &info) {
-        unimplemented!()
+
+    // TAY Transfer Accumulator to Index Y
+    // A -> Y
+    // N Z C I D V
+    // + + - - - -
+    fn tay(&mut self, info: &Info) {
+        self.Y = self.A;
+        self.set_NZ(self.Y)
     }
-    fn tsx(&mut self, info: &info) {
-        unimplemented!()
+
+    // TSX Transfer Stack Pointer to Index X
+    // SP -> X
+    // N Z C I D V
+    // + + - - - -
+    fn tsx(&mut self, info: &Info) {
+        self.X = self.SP;
+        self.set_NZ(self.X)
     }
-    fn txa(&mut self, info: &info) {
-        unimplemented!()
+
+    // TXA Transfer Index X to Accumulator
+    // X -> A
+    // N Z C I D V
+    // + + - - - -
+    fn txa(&mut self, info: &Info) {
+        self.A = self.X;
+        self.set_NZ(self.A)
     }
-    fn txs(&mut self, info: &info) {
-        unimplemented!()
+
+    // TXS Transfer Index X to Stack Register
+    // X -> SP
+    // N Z C I D V
+    // - - - - - -
+    fn txs(&mut self, info: &Info) {
+        self.SP = self.X
     }
-    fn tya(&mut self, info: &info) {
-        unimplemented!()
+
+    // TYA Transfer Index Y to Accumulator
+    // Y -> A
+    // N Z C I D V
+    // + + - - - -
+    fn tya(&mut self, info: &Info) {
+        self.A = self.Y;
+        self.set_NZ(self.A)
     }
-    fn err(&mut self, info: &info) {
+
+    fn err(&mut self, info: &Info) {
         unimplemented!()
     }
 
