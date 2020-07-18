@@ -1,5 +1,4 @@
-use crate::{Cartridge, Result};
-use std::fmt::format;
+use crate::Cartridge;
 
 // The NES’ limited memory was sufficient for early games, however as they became more
 // complex, games became larger and the memory was insufficient. To allow cartridges to
@@ -43,7 +42,7 @@ impl Mapper for Mapper0 {
             0x6000..=0x7fff => self.cartridge.sram[addr as usize - 0x6000],
             0x8000..=0xbfff => self.cartridge.prg[addr as usize - 0x8000],
             0xc000..=0xffff => {
-                if (self.is_unrom256) {
+                if self.is_unrom256 {
                     let last_bank_start = (self.cartridge.prg.len() / 0x4000 - 1) * 0x4000;
                     self.cartridge.prg[last_bank_start + addr as usize - 0xc0000]
                 } else {
@@ -59,7 +58,7 @@ impl Mapper for Mapper0 {
             0x6000..=0x7fff => self.cartridge.sram[addr as usize - 0x6000] = v,
             0x8000..=0xbfff => self.cartridge.prg[addr as usize - 0x8000] = v,
             0xc000..=0xffff => {
-                if (self.is_unrom256) {
+                if self.is_unrom256 {
                     let last_bank_start = (self.cartridge.prg.len() / 0x4000 - 1) * 0x4000;
                     self.cartridge.prg[last_bank_start + addr as usize - 0xc0000] = v
                 } else {
