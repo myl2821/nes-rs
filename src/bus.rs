@@ -34,7 +34,7 @@ impl<T: Mapper> Bus<T> {
     pub fn read8(&self, addr: u16) -> u8 {
         match addr {
             0..=0x1fff => {
-                let a = addr % 0x0800;
+                let a = addr & 0x07ff;
                 self.ram[a as usize]
             }
             0x2000..=0x3fff => todo!(),
@@ -51,7 +51,7 @@ impl<T: Mapper> Bus<T> {
     pub fn write8(&mut self, addr: u16, v: u8) {
         match addr {
             0..=0x1fff => {
-                let a = addr % 0x0800;
+                let a = addr & 0x07ff;
                 self.ram[a as usize] = v;
             }
             0x2000..=0x3fff => todo!(),
