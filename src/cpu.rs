@@ -109,8 +109,8 @@ enum Mode {
     ZeroPageY,
 }
 
-pub struct OP<'a> {
-    name: &'a str,
+pub struct OP {
+    name: &'static str,
     mode: Mode,
     len: u16,
     cycle: u64,
@@ -233,7 +233,7 @@ impl<T: Mapper> CPU<T> {
         self.PC = self.rst();
         self.SP = 0xfd;
         self.P = F::U | F::I;
-        self.cycles = 0;
+        self.cycles = 7;
     }
 
     pub fn set_PC(&mut self, pc: u16) {

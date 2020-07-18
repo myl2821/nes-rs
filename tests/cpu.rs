@@ -51,8 +51,8 @@ fn compare_with_nestest() {
     let mut i = 1;
     println!("check status before running line {}...", i);
 
+    cpu.borrow_mut().reset();
     cpu.borrow_mut().set_PC(0xc000);
-    cpu.borrow_mut().set_cycles(7);
 
     let csv_file = File::open("tests/fixture/status.txt").unwrap();
     let mut rdr = csv::Reader::from_reader(csv_file);
