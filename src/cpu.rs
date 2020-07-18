@@ -358,47 +358,47 @@ impl<T: Mapper> CPU<T> {
         }
     }
 
-    fn is_flag_0(&self, f: F) -> bool {
+    fn without_flag(&self, f: F) -> bool {
         !self.P.contains(f)
     }
 
-    fn is_flag_1(&self, f: F) -> bool {
+    fn contains_flag(&self, f: F) -> bool {
         self.P.contains(f)
     }
 
-    fn set_flag_to_0(&mut self, f: F) {
+    fn clear_flag(&mut self, f: F) {
         self.P.remove(f)
     }
 
-    fn set_flag_to_1(&mut self, f: F) {
+    fn set_flag(&mut self, f: F) {
         self.P.insert(f)
     }
 
     fn get_flag(&mut self, f: F) -> u8 {
-        match self.is_flag_0(f) {
+        match self.without_flag(f) {
             true => 0,
             _ => 1,
         }
     }
 
-    fn set_flag(&mut self, f: F, v: u8) {
+    fn update_flag(&mut self, f: F, v: u8) {
         match v {
-            0x00 => self.set_flag_to_0(f),
-            _ => self.set_flag_to_1(f),
+            0x00 => self.clear_flag(f),
+            _ => self.set_flag(f),
         }
     }
 
     fn set_Z(&mut self, v: u8) {
         match v {
-            0x00 => self.set_flag_to_1(F::Z),
-            _ => self.set_flag_to_0(F::Z),
+            0x00 => self.set_flag(F::Z),
+            _ => self.clear_flag(F::Z),
         }
     }
 
     fn set_N(&mut self, v: u8) {
         match v & F::N.bits {
-            0x00 => self.set_flag_to_0(F::N),
-            _ => self.set_flag_to_1(F::N),
+            0x00 => self.clear_flag(F::N),
+            _ => self.set_flag(F::N),
         }
     }
 
@@ -445,9 +445,9 @@ impl<T: Mapper> CPU<T> {
     fn compare(&mut self, m: u8, n: u8) {
         self.set_NZ(m.wrapping_sub(n));
         if m >= n {
-            self.set_flag_to_1(F::C)
+            self.set_flag(F::C)
         } else {
-            self.set_flag_to_0(F::C)
+            self.clear_flag(F::C)
         }
     }
 
@@ -469,15 +469,15 @@ impl<T: Mapper> CPU<T> {
         self.set_NZ(self.A);
 
         if a as u16 + m as u16 + c as u16 > 0xff {
-            self.set_flag_to_1(F::C)
+            self.set_flag(F::C)
         } else {
-            self.set_flag_to_0(F::C)
+            self.clear_flag(F::C)
         }
 
         if ((a ^ m) >> 7) & 1 == 0 && ((a ^ self.A) >> 7) & 1 != 0 {
-            self.set_flag_to_1(F::V)
+            self.set_flag(F::V)
         } else {
-            self.set_flag_to_0(F::V)
+            self.clear_flag(F::V)
         }
     }
 
@@ -497,13 +497,13 @@ impl<T: Mapper> CPU<T> {
     fn asl(&mut self, info: &Info) {
         match info.mode {
             Mode::Accumulator => {
-                self.set_flag(F::C, (self.A >> 7) & 0x01);
+                self.update_flag(F::C, (self.A >> 7) & 0x01);
                 self.A <<= 1;
                 self.set_NZ(self.A)
             }
             _ => {
                 let mut m = self.read8(info.addr);
-                self.set_flag(F::C, (m >> 7) & 0x01);
+                self.update_flag(F::C, (m >> 7) & 0x01);
                 m <<= 1;
                 self.write8(info.addr, m);
                 self.set_NZ(m)
@@ -516,7 +516,7 @@ impl<T: Mapper> CPU<T> {
     // N Z C I D V
     // - - - - - -
     fn bcc(&mut self, info: &Info) {
-        self.branch_on(self.is_flag_0(F::C), info)
+        self.branch_on(self.without_flag(F::C), info)
     }
 
     // BCS Branch on Carry Set
@@ -524,7 +524,7 @@ impl<T: Mapper> CPU<T> {
     // N Z C I D V
     // - - - - - -
     fn bcs(&mut self, info: &Info) {
-        self.branch_on(self.is_flag_1(F::C), info)
+        self.branch_on(self.contains_flag(F::C), info)
     }
 
     // BEQ Branch on Result Zero
@@ -532,7 +532,7 @@ impl<T: Mapper> CPU<T> {
     // N Z C I D V
     // - - - - - -
     fn beq(&mut self, info: &Info) {
-        self.branch_on(self.is_flag_1(F::Z), info)
+        self.branch_on(self.contains_flag(F::Z), info)
     }
 
     // BIT Test Bits in Memory with Accumulator
@@ -545,7 +545,7 @@ impl<T: Mapper> CPU<T> {
         let m = self.read8(info.addr);
         self.set_Z(self.A & m);
         self.set_N(m);
-        self.set_flag(F::V, (m >> 6) & 0x01)
+        self.update_flag(F::V, (m >> 6) & 0x01)
     }
 
     // BMI Branch on Result Minus
@@ -553,7 +553,7 @@ impl<T: Mapper> CPU<T> {
     // N Z C I D V
     // - - - - - -
     fn bmi(&mut self, info: &Info) {
-        self.branch_on(self.is_flag_1(F::N), info)
+        self.branch_on(self.contains_flag(F::N), info)
     }
 
     // Branch on Result not Zero
@@ -561,7 +561,7 @@ impl<T: Mapper> CPU<T> {
     // N Z C I D V
     // - - - - - -
     fn bne(&mut self, info: &Info) {
-        self.branch_on(self.is_flag_0(F::Z), info)
+        self.branch_on(self.without_flag(F::Z), info)
     }
 
     // BPL Branch on Result Plus
@@ -569,7 +569,7 @@ impl<T: Mapper> CPU<T> {
     // N Z C I D V
     // - - - - - -
     fn bpl(&mut self, info: &Info) {
-        self.branch_on(self.is_flag_0(F::N), info)
+        self.branch_on(self.without_flag(F::N), info)
     }
 
     fn brk(&mut self, info: &Info) {
@@ -581,7 +581,7 @@ impl<T: Mapper> CPU<T> {
     // N Z C I D V
     // - - - - - -
     fn bvc(&mut self, info: &Info) {
-        self.branch_on(self.is_flag_0(F::V), info)
+        self.branch_on(self.without_flag(F::V), info)
     }
 
     // BVS Branch on Overflow Set
@@ -589,7 +589,7 @@ impl<T: Mapper> CPU<T> {
     // N Z C I D V
     // - - - - - -
     fn bvs(&mut self, info: &Info) {
-        self.branch_on(self.is_flag_1(F::V), info)
+        self.branch_on(self.contains_flag(F::V), info)
     }
 
     // CLC Clear Carry Flag
@@ -597,7 +597,7 @@ impl<T: Mapper> CPU<T> {
     // N Z C I D V
     // - - 0 - - -
     fn clc(&mut self, _info: &Info) {
-        self.set_flag_to_0(F::C)
+        self.clear_flag(F::C)
     }
 
     // CLD Clear Decimal Mode
@@ -605,7 +605,7 @@ impl<T: Mapper> CPU<T> {
     // N Z C I D V
     // - - - - 0 -
     fn cld(&mut self, _info: &Info) {
-        self.set_flag_to_0(F::D)
+        self.clear_flag(F::D)
     }
 
     fn cli(&mut self, info: &Info) {
@@ -617,7 +617,7 @@ impl<T: Mapper> CPU<T> {
     // N Z C I D V
     // - - - - - 0
     fn clv(&mut self, _info: &Info) {
-        self.set_flag_to_0(F::V)
+        self.clear_flag(F::V)
     }
 
     // CMP Compare Memory with Accumulator
@@ -764,13 +764,13 @@ impl<T: Mapper> CPU<T> {
     fn lsr(&mut self, info: &Info) {
         match info.mode {
             Mode::Accumulator => {
-                self.set_flag(F::C, self.A & 0x01);
+                self.update_flag(F::C, self.A & 0x01);
                 self.A >>= 1;
                 self.set_NZ(self.A)
             }
             _ => {
                 let mut m = self.read8(info.addr);
-                self.set_flag(F::C, m & 0x01);
+                self.update_flag(F::C, m & 0x01);
                 m >>= 1;
                 self.write8(info.addr, m);
                 self.set_NZ(m)
@@ -833,14 +833,14 @@ impl<T: Mapper> CPU<T> {
         match info.mode {
             Mode::Accumulator => {
                 let c = self.get_flag(F::C);
-                self.set_flag(F::C, (self.A >> 7) & 0x01);
+                self.update_flag(F::C, (self.A >> 7) & 0x01);
                 self.A = (self.A << 1) | c;
                 self.set_NZ(self.A)
             }
             _ => {
                 let mut m = self.read8(info.addr);
                 let c = self.get_flag(F::C);
-                self.set_flag(F::C, (m >> 7) & 0x01);
+                self.update_flag(F::C, (m >> 7) & 0x01);
                 m = (m << 1) | c;
                 self.write8(info.addr, m);
                 self.set_NZ(m)
@@ -856,14 +856,14 @@ impl<T: Mapper> CPU<T> {
         match info.mode {
             Mode::Accumulator => {
                 let c = self.get_flag(F::C);
-                self.set_flag(F::C, self.A & 0x01);
+                self.update_flag(F::C, self.A & 0x01);
                 self.A = (self.A >> 1) | (c << 7);
                 self.set_NZ(self.A)
             }
             _ => {
                 let mut m = self.read8(info.addr);
                 let c = self.get_flag(F::C);
-                self.set_flag(F::C, m & 0x01);
+                self.update_flag(F::C, m & 0x01);
                 m = (m >> 1) | (c << 7);
                 self.write8(info.addr, m);
                 self.set_NZ(m)
@@ -902,15 +902,15 @@ impl<T: Mapper> CPU<T> {
         self.set_NZ(self.A);
 
         if a as i16 - m as i16 - (1 - c) as i16 >= 0 {
-            self.set_flag_to_1(F::C)
+            self.set_flag(F::C)
         } else {
-            self.set_flag_to_0(F::C)
+            self.clear_flag(F::C)
         }
 
         if ((a ^ m) >> 7) & 1 != 0 && ((a ^ self.A) >> 7) & 1 != 0 {
-            self.set_flag_to_1(F::V)
+            self.set_flag(F::V)
         } else {
-            self.set_flag_to_0(F::V)
+            self.clear_flag(F::V)
         }
     }
 
@@ -919,7 +919,7 @@ impl<T: Mapper> CPU<T> {
     // N Z C I D V
     // - - 1 - - -
     fn sec(&mut self, _info: &Info) {
-        self.set_flag_to_1(F::C)
+        self.set_flag(F::C)
     }
 
     // SED Set Decimal Flag
@@ -927,7 +927,7 @@ impl<T: Mapper> CPU<T> {
     // N Z C I D V
     // - - - - 1 -
     fn sed(&mut self, _info: &Info) {
-        self.set_flag_to_1(F::D)
+        self.set_flag(F::D)
     }
 
     // SEI Set Interrupt Disable Status
@@ -935,7 +935,7 @@ impl<T: Mapper> CPU<T> {
     // N Z C I D V
     // - - - 1 - -
     fn sei(&mut self, _info: &Info) {
-        self.set_flag_to_1(F::I)
+        self.set_flag(F::I)
     }
 
     // TA Store Accumulator in Memory
