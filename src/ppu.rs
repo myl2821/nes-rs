@@ -1,5 +1,8 @@
 // http://wiki.nesdev.com/w/index.php/PPU_programmer_reference
 
+use crate::Bus;
+use std::cell::RefCell;
+use std::rc::Rc;
 bitflags! {
     pub struct CtrlFlag: u8 {
         const name_table = 0x03; // Nametable ($2000 / $2400 / $2800 / $2C00).
@@ -38,6 +41,16 @@ pub struct PPU {
     ctrl: CtrlFlag,
     mask: MaskFlag,
     status: StatusFlag,
+}
+
+impl PPU {
+    pub fn new() -> Self {
+        Self {
+            ctrl: CtrlFlag::empty(),
+            mask: MaskFlag::empty(),
+            status: StatusFlag::empty(),
+        }
+    }
 }
 
 #[test]

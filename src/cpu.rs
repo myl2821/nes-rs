@@ -1,4 +1,6 @@
-use crate::Mapper;
+use crate::{Bus, Mapper};
+use std::cell::RefCell;
+use std::rc::Rc;
 
 const VERCTOR_NMI: u16 = 0xFFFA;
 const VERCTOR_RST: u16 = 0xFFFC;
@@ -28,8 +30,6 @@ bitflags! {
 pub struct CPU<T: Mapper> {
     // Memory mapper
     mapper: T,
-
-    ram: [u8; 2048],
 
     // The program counter is a 16-bit register which holds the address of the next instruction to be executed
     PC: u16,
@@ -65,6 +65,8 @@ pub struct CPU<T: Mapper> {
     ins: [fn(&mut CPU<T>, &Info); 256],
 
     cycles: u64,
+
+    bus: Option<Rc<RefCell<Bus<T>>>>,
 }
 
 // Address Modes:
@@ -140,7 +142,6 @@ impl<T: Mapper> CPU<T> {
     pub fn new(mapper: T) -> Self {
         let mut cpu = CPU {
             mapper: mapper,
-            ram: [0; 2048],
             PC: 0x0000,
             SP: 0x00,
             A: 0x00,
@@ -149,15 +150,20 @@ impl<T: Mapper> CPU<T> {
             P: F::empty(),
             ins: [CPU::jmp; 256],
             cycles: 0,
+            bus: None,
         };
         cpu.init_ins_table();
         cpu.reset();
         cpu
     }
 
+    pub fn connect_bus(&mut self, bus: Rc<RefCell<Bus<T>>>) {
+        self.bus = Some(bus);
+    }
+
     pub fn read8(&self, addr: u16) -> u8 {
         match addr {
-            0..=0x1fff => self.ram[addr as usize],
+            0..=0x1fff => self.bus.as_ref().unwrap().borrow().ram[addr as usize],
             0x2000..=0x3fff => todo!(),
             0x4000..=0x4013 => 0,
             0x4014 => todo!(),
@@ -171,7 +177,7 @@ impl<T: Mapper> CPU<T> {
 
     pub fn write8(&mut self, addr: u16, v: u8) {
         match addr {
-            0..=0x1fff => self.ram[addr as usize] = v,
+            0..=0x1fff => self.bus.as_ref().unwrap().borrow_mut().ram[addr as usize] = v,
             0x2000..=0x3fff => todo!(),
             0x4000..=0x4013 => (), //FIXME todo!(),
             0x4014 => todo!(),

@@ -1,10 +1,12 @@
 extern crate csv;
 
-use nes::{Cartridge, Mapper0, CPU};
+use nes::{Bus, Cartridge, Mapper0, CPU, PPU};
 use std::fs::File;
 use std::path::Path;
 
 use serde::Deserialize;
+use std::cell::RefCell;
+use std::rc::Rc;
 
 #[derive(Debug, Deserialize, PartialEq)]
 struct Status {
@@ -35,18 +37,26 @@ fn run() {
     let path = Path::new("tests/fixture/nestest.nes");
     let mut cartridge = Cartridge::new(path).unwrap();
     let mapper0 = Mapper0::new(cartridge);
-    let mut cpu = CPU::new(mapper0);
+
+    let mut cpu = Rc::new(RefCell::new(CPU::new(mapper0)));
+    let ppu = Rc::new(RefCell::new(PPU::new()));
+    let bus = Rc::new(RefCell::new(Bus::new(cpu.clone(), ppu.clone())));
+    cpu.borrow_mut().connect_bus(bus.clone());
 
     let mut i = 1;
     println!("check status before running line {}...", i);
-    cpu.set_PC(0xc000);
-    cpu.set_cycles(7);
+
+    {
+        let mut cpu = cpu.as_ref().borrow_mut();
+        cpu.set_PC(0xc000);
+        cpu.set_cycles(7);
+    }
 
     let csv_file = File::open("tests/fixture/status.txt").unwrap();
     let mut rdr = csv::Reader::from_reader(csv_file);
     for result in rdr.deserialize() {
         let target: Status = result.unwrap();
-        match cpu.debug_info() {
+        match cpu.borrow().debug_info() {
             (s, addr, ins, a, x, y, p, sp, cyc) => {
                 let current = Status {
                     addr: format!("{:04X}", addr),
@@ -64,7 +74,7 @@ fn run() {
             }
         }
         println!("execute line {}...\n", i);
-        cpu.step();
+        cpu.borrow_mut().step();
 
         i += 1;
         println!("check status before running line {}...", i);
