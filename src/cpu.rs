@@ -232,7 +232,7 @@ impl<T: Mapper> CPU<T> {
     pub fn reset(&mut self) {
         self.PC = self.rst();
         self.SP = 0xfd;
-        self.P.insert(F::U | F::I);
+        self.P = F::U | F::I;
         self.cycles = 0;
     }
 
