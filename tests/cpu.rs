@@ -23,7 +23,7 @@ struct Status {
 #[test]
 fn mapper0() {
     let path = Path::new("tests/fixture/nestest.nes");
-    let mut cartridge = Cartridge::new(path).unwrap();
+    let cartridge = Cartridge::new(path).unwrap();
     let mapper0 = Mapper0::new(cartridge);
     let cpu = CPU::new(mapper0);
 
@@ -33,12 +33,12 @@ fn mapper0() {
 }
 
 #[test]
-fn run() {
+fn compare_with_nestest() {
     let path = Path::new("tests/fixture/nestest.nes");
-    let mut cartridge = Cartridge::new(path).unwrap();
+    let cartridge = Cartridge::new(path).unwrap();
     let mapper0 = Mapper0::new(cartridge);
 
-    let mut cpu = Rc::new(RefCell::new(CPU::new(mapper0)));
+    let cpu = Rc::new(RefCell::new(CPU::new(mapper0)));
     let ppu = Rc::new(RefCell::new(PPU::new()));
     let bus = Rc::new(RefCell::new(Bus::new(cpu.clone(), ppu.clone())));
     cpu.borrow_mut().connect_bus(bus.clone());
@@ -46,11 +46,8 @@ fn run() {
     let mut i = 1;
     println!("check status before running line {}...", i);
 
-    {
-        let mut cpu = cpu.as_ref().borrow_mut();
-        cpu.set_PC(0xc000);
-        cpu.set_cycles(7);
-    }
+    cpu.borrow_mut().set_PC(0xc000);
+    cpu.borrow_mut().set_cycles(7);
 
     let csv_file = File::open("tests/fixture/status.txt").unwrap();
     let mut rdr = csv::Reader::from_reader(csv_file);
@@ -60,7 +57,7 @@ fn run() {
             (s, addr, ins, a, x, y, p, sp, cyc) => {
                 let current = Status {
                     addr: format!("{:04X}", addr),
-                    ins: ins.clone(),
+                    ins: ins,
                     a: format!("{:02X}", a),
                     x: format!("{:02X}", x),
                     y: format!("{:02X}", y),
