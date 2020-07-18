@@ -158,37 +158,11 @@ impl<T: Mapper> CPU<T> {
     }
 
     pub fn read8(&self, addr: u16) -> u8 {
-        match addr {
-            0..=0x1fff => self.bus.as_ref().unwrap().borrow().ram[addr as usize],
-            0x2000..=0x3fff => todo!(),
-            0x4000..=0x4013 => 0,
-            0x4014 => todo!(),
-            0x4015 => todo!(),
-            0x4016 => todo!(),
-            0x4017 => todo!(),
-            0x4018..=0x401f => 0, // normally disabled, maybe should return Err
-            0x4020..=0xffff => self.bus.as_ref().unwrap().borrow().mapper.read(addr),
-        }
+        self.bus.as_ref().unwrap().borrow().read8(addr)
     }
 
     pub fn write8(&mut self, addr: u16, v: u8) {
-        match addr {
-            0..=0x1fff => self.bus.as_ref().unwrap().borrow_mut().ram[addr as usize] = v,
-            0x2000..=0x3fff => todo!(),
-            0x4000..=0x4013 => (), //FIXME todo!(),
-            0x4014 => todo!(),
-            0x4015 => (), //FIXME todo!(),
-            0x4016 => todo!(),
-            0x4017 => todo!(),
-            0x4018..=0x401f => todo!(),
-            0x4020..=0xffff => self
-                .bus
-                .as_ref()
-                .unwrap()
-                .borrow_mut()
-                .mapper
-                .write(addr, v),
-        }
+        self.bus.as_ref().unwrap().borrow_mut().write8(addr, v)
     }
 
     pub fn read16(&self, addr: u16) -> u16 {
