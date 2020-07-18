@@ -1,19 +1,20 @@
 use crate::ppu::PPU;
-use crate::{Cartridge, Mapper, Mapper0, CPU};
+use crate::{Mapper, CPU};
 use std::cell::RefCell;
-use std::path::Path;
 use std::rc::Rc;
 
 pub struct Bus<T: Mapper> {
     pub ram: [u8; 2048],
+    pub mapper: T,
     cpu: Rc<RefCell<CPU<T>>>,
-    ppu: Rc<RefCell<PPU>>,
+    ppu: Rc<RefCell<PPU<T>>>,
 }
 
 impl<T: Mapper> Bus<T> {
-    pub fn new(cpu: Rc<RefCell<CPU<T>>>, ppu: Rc<RefCell<PPU>>) -> Self {
+    pub fn new(mapper: T, cpu: Rc<RefCell<CPU<T>>>, ppu: Rc<RefCell<PPU<T>>>) -> Self {
         Self {
             ram: [0; 2048],
+            mapper: mapper,
             cpu: cpu,
             ppu: ppu,
         }

@@ -25,11 +25,15 @@ fn mapper0() {
     let path = Path::new("tests/fixture/nestest.nes");
     let cartridge = Cartridge::new(path).unwrap();
     let mapper0 = Mapper0::new(cartridge);
-    let cpu = CPU::new(mapper0);
+    let cpu = Rc::new(RefCell::new(CPU::new()));
+    let ppu = Rc::new(RefCell::new(PPU::new()));
+    let bus = Rc::new(RefCell::new(Bus::new(mapper0, cpu.clone(), ppu.clone())));
+    cpu.borrow_mut().connect_bus(bus.clone());
+    ppu.borrow_mut().connect_bus(bus.clone());
 
-    assert_eq!(0xc5af, cpu.nmi());
-    assert_eq!(0xc004, cpu.rst());
-    assert_eq!(0xc5f4, cpu.irq());
+    assert_eq!(0xc5af, cpu.borrow().nmi());
+    assert_eq!(0xc004, cpu.borrow().rst());
+    assert_eq!(0xc5f4, cpu.borrow().irq());
 }
 
 #[test]
@@ -38,10 +42,11 @@ fn compare_with_nestest() {
     let cartridge = Cartridge::new(path).unwrap();
     let mapper0 = Mapper0::new(cartridge);
 
-    let cpu = Rc::new(RefCell::new(CPU::new(mapper0)));
+    let cpu = Rc::new(RefCell::new(CPU::new()));
     let ppu = Rc::new(RefCell::new(PPU::new()));
-    let bus = Rc::new(RefCell::new(Bus::new(cpu.clone(), ppu.clone())));
+    let bus = Rc::new(RefCell::new(Bus::new(mapper0, cpu.clone(), ppu.clone())));
     cpu.borrow_mut().connect_bus(bus.clone());
+    ppu.borrow_mut().connect_bus(bus.clone());
 
     let mut i = 1;
     println!("check status before running line {}...", i);

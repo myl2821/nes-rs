@@ -1,8 +1,9 @@
 // http://wiki.nesdev.com/w/index.php/PPU_programmer_reference
 
-use crate::Bus;
+use crate::{Bus, Mapper};
 use std::cell::RefCell;
 use std::rc::Rc;
+
 bitflags! {
     pub struct CtrlFlag: u8 {
         const name_table = 0x03; // Nametable ($2000 / $2400 / $2800 / $2C00).
@@ -37,19 +38,25 @@ bitflags! {
     }
 }
 
-pub struct PPU {
+pub struct PPU<T: Mapper> {
     ctrl: CtrlFlag,
     mask: MaskFlag,
     status: StatusFlag,
+    bus: Option<Rc<RefCell<Bus<T>>>>,
 }
 
-impl PPU {
+impl<T: Mapper> PPU<T> {
     pub fn new() -> Self {
         Self {
             ctrl: CtrlFlag::empty(),
             mask: MaskFlag::empty(),
             status: StatusFlag::empty(),
+            bus: None,
         }
+    }
+
+    pub fn connect_bus(&mut self, bus: Rc<RefCell<Bus<T>>>) {
+        self.bus = Some(bus);
     }
 }
 
