@@ -28,9 +28,6 @@ bitflags! {
 }
 
 pub struct CPU<T: Mapper> {
-    // Memory mapper
-    mapper: T,
-
     // The program counter is a 16-bit register which holds the address of the next instruction to be executed
     PC: u16,
 
@@ -139,9 +136,8 @@ struct Info {
 // $4018-$401F	 |  $0008  |  APU and I/O functionality that is normally disabled. See CPU Test Mode
 // $4020-$FFFF	 |  $BFE0  |  Cartridge space: PRG ROM, PRG RAM, and mapper registers (See Note)
 impl<T: Mapper> CPU<T> {
-    pub fn new(mapper: T) -> Self {
+    pub fn new() -> Self {
         let mut cpu = CPU {
-            mapper: mapper,
             PC: 0x0000,
             SP: 0x00,
             A: 0x00,
@@ -153,12 +149,12 @@ impl<T: Mapper> CPU<T> {
             bus: None,
         };
         cpu.init_ins_table();
-        cpu.reset();
         cpu
     }
 
     pub fn connect_bus(&mut self, bus: Rc<RefCell<Bus<T>>>) {
         self.bus = Some(bus);
+        self.reset();
     }
 
     pub fn read8(&self, addr: u16) -> u8 {
@@ -171,7 +167,7 @@ impl<T: Mapper> CPU<T> {
             0x4016 => todo!(),
             0x4017 => todo!(),
             0x4018..=0x401f => 0, // normally disabled, maybe should return Err
-            0x4020..=0xffff => self.mapper.read(addr),
+            0x4020..=0xffff => self.bus.as_ref().unwrap().borrow().mapper.read(addr),
         }
     }
 
@@ -185,7 +181,13 @@ impl<T: Mapper> CPU<T> {
             0x4016 => todo!(),
             0x4017 => todo!(),
             0x4018..=0x401f => todo!(),
-            0x4020..=0xffff => self.mapper.write(addr, v),
+            0x4020..=0xffff => self
+                .bus
+                .as_ref()
+                .unwrap()
+                .borrow_mut()
+                .mapper
+                .write(addr, v),
         }
     }
 
