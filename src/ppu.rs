@@ -39,9 +39,12 @@ bitflags! {
 }
 
 pub struct PPU<T: Mapper> {
-    ctrl: CtrlFlag,
-    mask: MaskFlag,
-    status: StatusFlag,
+    ctrl: CtrlFlag,     // 0x2000
+    mask: MaskFlag,     // 0x2001
+    status: StatusFlag, // 0x2002
+    oam_addr: u8,       // 0x2003
+    oam: [u8; 0x0100],  // 0x2004
+
     bus: Option<Rc<RefCell<Bus<T>>>>,
 }
 
@@ -51,12 +54,42 @@ impl<T: Mapper> PPU<T> {
             ctrl: CtrlFlag::empty(),
             mask: MaskFlag::empty(),
             status: StatusFlag::empty(),
+            oam_addr: 0x00,
+            oam: [0; 0x0100],
             bus: None,
         }
     }
 
     pub fn connect_bus(&mut self, bus: Rc<RefCell<Bus<T>>>) {
         self.bus = Some(bus);
+    }
+
+    // Reading any readable port (PPUSTATUS 0x2002, OAMDATA 0x2004, or PPUDATA 0x2007) also fills the latch with the bits read.
+    pub fn read_register(&self, addr: u16) -> u8 {
+        match addr {
+            0x2002 => self.status.bits,
+            0x2004 => self.oam[self.oam_addr as usize],
+            0x2007 => todo!(),
+            _ => panic!(),
+        }
+    }
+
+    // Writing any value to any PPU port, even to the nominally read-only PPUSTATUS, will fill this latch.
+    pub fn write_register(&mut self, addr: u16, v: u8) {
+        match addr {
+            0x2000 => self.ctrl = CtrlFlag::from_bits(v).unwrap(),
+            0x2001 => self.mask = MaskFlag::from_bits(v).unwrap(),
+            0x2003 => self.oam_addr = v,
+            0x2004 => {
+                self.oam[self.oam_addr as usize] = v;
+                self.oam_addr += 1
+            }
+            0x2005 => todo!(),
+            0x2006 => todo!(),
+            0x2007 => todo!(),
+            0x4014 => todo!(),
+            _ => panic!(),
+        }
     }
 }
 
