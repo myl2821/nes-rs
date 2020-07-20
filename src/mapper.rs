@@ -39,6 +39,7 @@ impl Mapper0 {
 impl Mapper for Mapper0 {
     fn read(&self, addr: u16) -> u8 {
         match addr {
+            0x0000..=0x1fff => self.cartridge.chr[addr as usize],
             0x6000..=0x7fff => self.cartridge.sram[addr as usize - 0x6000],
             0x8000..=0xbfff => self.cartridge.prg[addr as usize - 0x8000],
             0xc000..=0xffff => {
@@ -55,6 +56,7 @@ impl Mapper for Mapper0 {
 
     fn write(&mut self, addr: u16, v: u8) {
         match addr {
+            0x0000..=0x1fff => self.cartridge.chr[addr as usize] = v,
             0x6000..=0x7fff => self.cartridge.sram[addr as usize - 0x6000] = v,
             0x8000..=0xbfff => self.cartridge.prg[addr as usize - 0x8000] = v,
             0xc000..=0xffff => {
