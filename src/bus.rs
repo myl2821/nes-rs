@@ -36,13 +36,16 @@ impl<T: Mapper> Bus<T> {
     // $4000-$4017   |  $0018  |  NES APU and I/O registers
     // $4018-$401F   |  $0008  |  APU and I/O functionality that is normally disabled. See CPU Test Mode
     // $4020-$FFFF   |  $BFE0  |  Cartridge space: PRG ROM, PRG RAM, and mapper registers (See Note)
-    pub fn cpu_read8(&self, addr: u16) -> u8 {
+    pub fn cpu_read8(&mut self, addr: u16) -> u8 {
         match addr {
             0..=0x1fff => {
                 let a = addr & 0x07ff;
                 self.ram[a as usize]
             }
-            0x2000..=0x3fff => self.ppu.borrow().read_register(0x2000 | (addr & 0x0008)),
+            0x2000..=0x3fff => self
+                .ppu
+                .borrow_mut()
+                .read_register(0x2000 | (addr & 0x0008)),
             0x4000..=0x4013 => 0,
             0x4014 => todo!(),
             0x4015 => todo!(),

@@ -146,7 +146,7 @@ impl<T: Mapper> CPU<T> {
     }
 
     pub fn read8(&self, addr: u16) -> u8 {
-        self.bus.as_ref().unwrap().borrow().cpu_read8(addr)
+        self.bus.as_ref().unwrap().borrow_mut().cpu_read8(addr)
     }
 
     pub fn write8(&mut self, addr: u16, v: u8) {
