@@ -61,7 +61,11 @@ pub struct CPU<T: Mapper> {
     // Instruction function table
     ins: [fn(&mut CPU<T>, &Info); 256],
 
-    cycles: u64,
+    pub cycles: u64,
+
+    interrupt: Interrupt,
+    //  CPU is suspended during transfer CPU page to PPU OAM
+    pub suspend: u64,
 
     bus: Option<Rc<RefCell<Bus<T>>>>,
 }
@@ -109,6 +113,18 @@ enum Mode {
     ZeroPageY,
 }
 
+impl Default for Mode {
+    fn default() -> Self {
+        Mode::Implied
+    }
+}
+
+enum Interrupt {
+    NMI,
+    IRQ,
+    NONE,
+}
+
 pub struct OP {
     name: &'static str,
     mode: Mode,
@@ -117,6 +133,7 @@ pub struct OP {
     page_cycle: u64,
 }
 
+#[derive(Default)]
 struct Info {
     addr: u16,
     pc: u16,
@@ -134,6 +151,8 @@ impl<T: Mapper> CPU<T> {
             P: F::empty(),
             ins: [CPU::jmp; 256],
             cycles: 0,
+            suspend: 0,
+            interrupt: Interrupt::NONE,
             bus: None,
         };
         cpu.init_ins_table();
@@ -179,23 +198,41 @@ impl<T: Mapper> CPU<T> {
         lo | hi << 8
     }
 
-    pub fn nmi(&self) -> u16 {
-        self.read16(VERCTOR_NMI)
+    pub fn nmi(&mut self) {
+        self.push16(self.PC);
+        self.php(&Default::default());
+        self.PC = self.read16(VERCTOR_NMI);
+        self.set_flag(F::I);
+        self.cycles += 7
     }
 
     pub fn rst(&self) -> u16 {
         self.read16(VERCTOR_RST)
     }
 
-    pub fn irq(&self) -> u16 {
-        self.read16(VERCTOR_IRQ)
+    pub fn irq(&mut self) {
+        self.push16(self.PC);
+        self.php(&Default::default());
+        self.PC = self.read16(VERCTOR_IRQ);
+        self.set_flag(F::I);
+        self.cycles += 7
+    }
+
+    pub fn set_nmi(&mut self) {
+        self.interrupt = Interrupt::NMI
+    }
+
+    pub fn set_irq(&mut self) {
+        if self.without_flag(F::I) {
+            self.interrupt = Interrupt::NMI
+        }
     }
 
     pub fn reset(&mut self) {
         self.PC = self.rst();
         self.SP = 0xfd;
         self.P = F::U | F::I;
-        self.cycles = 7;
+        self.cycles = 0;
     }
 
     pub fn set_PC(&mut self, pc: u16) {
@@ -207,9 +244,20 @@ impl<T: Mapper> CPU<T> {
     }
 
     pub fn step(&mut self) -> u64 {
+        if self.suspend > 0 {
+            self.suspend -= 1;
+            return 1;
+        }
+
         let cycles = self.cycles;
 
-        // TODO: Detect interrupts
+        // Detect interrupts
+        match self.interrupt {
+            Interrupt::NMI => self.nmi(),
+            Interrupt::IRQ => self.irq(),
+            _ => (),
+        }
+        self.interrupt = Interrupt::NONE;
 
         // Read instruction
         let opcode = self.read8(self.PC) as usize;

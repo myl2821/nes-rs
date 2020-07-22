@@ -31,9 +31,7 @@ fn mapper0() {
     cpu.borrow_mut().connect_bus(bus.clone());
     ppu.borrow_mut().connect_bus(bus.clone());
 
-    assert_eq!(0xc5af, cpu.borrow().nmi());
     assert_eq!(0xc004, cpu.borrow().rst());
-    assert_eq!(0xc5f4, cpu.borrow().irq());
 }
 
 #[test]
@@ -53,6 +51,7 @@ fn compare_with_nestest() {
 
     cpu.borrow_mut().reset();
     cpu.borrow_mut().set_PC(0xc000);
+    cpu.borrow_mut().set_cycles(7);
 
     let csv_file = File::open("tests/fixture/status.txt").unwrap();
     let mut rdr = csv::Reader::from_reader(csv_file);
