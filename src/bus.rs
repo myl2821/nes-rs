@@ -8,7 +8,7 @@ pub struct Bus<T: Mapper> {
     name_table: [u8; 0x1000], // 4KB
     palette: [u8; 0x0020],    // 32B
     mapper: T,
-    cpu: Rc<RefCell<CPU<T>>>,
+    pub cpu: Rc<RefCell<CPU<T>>>,
     ppu: Rc<RefCell<PPU<T>>>,
 }
 
@@ -45,7 +45,7 @@ impl<T: Mapper> Bus<T> {
             0x2000..=0x3fff => self
                 .ppu
                 .borrow_mut()
-                .read_register(0x2000 | (addr & 0x0008)),
+                .read_register(0x2000 | (addr & 0x0007)),
             0x4000..=0x4013 => 0,
             0x4014 => todo!(),
             0x4015 => todo!(),
@@ -65,12 +65,12 @@ impl<T: Mapper> Bus<T> {
             0x2000..=0x3fff => self
                 .ppu
                 .borrow_mut()
-                .write_register(0x2000 | (addr & 0x0008), v),
+                .write_register(0x2000 | (addr & 0x0007), v),
             0x4000..=0x4013 => (), //FIXME todo!(),
             0x4014 => self.ppu.borrow_mut().write_register(addr, v),
             0x4015 => (), //FIXME todo!(),
             0x4016 => todo!(),
-            0x4017 => todo!(),
+            0x4017 => (), //todo!(),
             0x4018..=0x401f => todo!(),
             0x4020..=0xffff => self.mapper.write(addr, v),
         }
@@ -89,21 +89,23 @@ impl<T: Mapper> Bus<T> {
     // $3F10-$3F1F   |  $0010  |  Sprite Palette
     // $3F20-$3FFF   |  $00E0  |  Mirrors of $3F00-$3F1F
     // $4000-$FFFF   |  $C000  |  Mirrors of $0000-$3FFF
-    pub fn ppu_read8(&self, addr: u16) -> u8 {
+    pub fn ppu_read8(&self, d: u16) -> u8 {
+        let addr = d & 0x3fff;
         match addr {
             0..=0x1fff => self.mapper.read(addr),
             0x2000..=0x3eff => self.name_table[(addr & 0x0fff) as usize],
             0x3f00..=0x3fff => self.palette[(addr % 0x001f) as usize],
-            0x4000..=0xffff => self.ppu_read8(addr & 0x3fff),
+            _ => panic!(),
         }
     }
 
-    pub fn ppu_write8(&mut self, addr: u16, v: u8) {
+    pub fn ppu_write8(&mut self, d: u16, v: u8) {
+        let addr = d & 0x3fff;
         match addr {
             0..=0x1fff => self.mapper.write(addr, v),
             0x2000..=0x3eff => self.name_table[(addr & 0x0fff) as usize] = v,
             0x3f00..=0x3fff => self.palette[(addr % 0x001f) as usize] = v,
-            0x4000..=0xffff => self.ppu_write8(addr & 0x3fff, v),
+            _ => panic!(),
         }
     }
 }
