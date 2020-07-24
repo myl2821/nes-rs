@@ -7,6 +7,7 @@ use sdl2::rect::Point;
 use std::path::Path;
 use std::time::{Duration, Instant, SystemTime};
 
+use sdl2::pixels::Color;
 use std::cell::RefCell;
 use std::rc::Rc;
 
@@ -51,6 +52,8 @@ fn draw() {
     let mut event_pump = sdl_context.event_pump().unwrap();
     let mut i = 0;
 
+    canvas.set_draw_color(Color::RGB(0, 0, 0));
+    canvas.clear();
     let mut last_frame_ts = Instant::now();
     'running: loop {
         for event in event_pump.poll_iter() {
@@ -69,32 +72,29 @@ fn draw() {
             }
         }
 
-        //canvas.set_draw_color(Color::RGB(0, 0, 0));
-        //canvas.clear();
+        // The rest of the game loop goes here...
 
         let mut x: u32 = 0;
         let mut y: u32 = 0;
         loop {
             let cpu_cycles = cpu.borrow_mut().step();
             //println!("{}", cpu.borrow().debug_info().0);
+
             for _ in 0..(cpu_cycles * 3) {
                 ppu.borrow_mut().step();
                 let pixel = ppu.borrow().back;
-                canvas.set_draw_color(pixel.c);
-                canvas.draw_point(Point::new(pixel.x as i32, pixel.y as i32));
                 x = pixel.x;
                 y = pixel.y;
-                //println!("{:?}", pixel);
-                if x == 255 && y == 240 {
+                if x >= 255 && y >= 240 {
                     break;
                 }
+                canvas.set_draw_color(pixel.c);
+                canvas.draw_point(Point::new(pixel.x as i32, pixel.y as i32));
             }
-            if x == 255 && y == 240 {
+            if x >= 255 && y >= 240 {
                 break;
             }
         }
-
-        // The rest of the game loop goes here...
 
         canvas.present();
 
