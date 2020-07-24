@@ -44,8 +44,7 @@ impl Mapper for Mapper0 {
             0x8000..=0xbfff => self.cartridge.prg[addr as usize - 0x8000],
             0xc000..=0xffff => {
                 if self.is_unrom256 {
-                    let last_bank_start = (self.cartridge.prg.len() / 0x4000 - 1) * 0x4000;
-                    self.cartridge.prg[last_bank_start + addr as usize - 0xc0000]
+                    self.cartridge.prg[addr as usize - 0x8000]
                 } else {
                     self.cartridge.prg[addr as usize - 0xc000]
                 }

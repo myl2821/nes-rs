@@ -9,6 +9,7 @@ use std::time::{Duration, Instant, SystemTime};
 
 use sdl2::pixels::Color;
 use std::cell::RefCell;
+use std::env::args;
 use std::rc::Rc;
 
 const SCREEN_WIDTH: u32 = 256;
@@ -17,11 +18,16 @@ const FPS: u32 = 60;
 const INTERVAL: u32 = 1_000_000_000u32 / FPS;
 
 fn main() {
-    draw()
+    let ags: Vec<String> = args().collect();
+    let path = match ags.get(1) {
+        Some(s) => s.clone(),
+        None => "tests/fixture/nestest.nes".to_owned(),
+    };
+    draw(path);
 }
 
-fn draw() {
-    let path = Path::new("tests/fixture/nestest.nes");
+fn draw(rom_path: String) {
+    let path = Path::new(&rom_path);
     let cartridge = Cartridge::new(path).unwrap();
     let mapper0 = Rc::new(RefCell::new(Mapper0::new(cartridge)));
 
