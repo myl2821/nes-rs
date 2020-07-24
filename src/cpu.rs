@@ -224,7 +224,7 @@ impl<T: Mapper> CPU<T> {
 
     pub fn set_irq(&mut self) {
         if self.without_flag(F::I) {
-            self.interrupt = Interrupt::NMI
+            self.interrupt = Interrupt::IRQ
         }
     }
 
@@ -608,7 +608,7 @@ impl<T: Mapper> CPU<T> {
         self.branch_on(self.without_flag(F::N), info)
     }
 
-    fn brk(&mut self, info: &Info) {
+    fn brk(&mut self, _info: &Info) {
         unimplemented!()
     }
 
@@ -644,7 +644,7 @@ impl<T: Mapper> CPU<T> {
         self.clear_flag(F::D)
     }
 
-    fn cli(&mut self, info: &Info) {
+    fn cli(&mut self, _info: &Info) {
         unimplemented!()
     }
 
@@ -1056,23 +1056,23 @@ impl<T: Mapper> CPU<T> {
     //    http://www.ffd2.com/fridge/docs/6502-NMOS.extra.opcodes   //
     //////////////////////////////////////////////////////////////////
 
-    fn ahx(&mut self, info: &Info) {
+    fn ahx(&mut self, _info: &Info) {
         unimplemented!()
     }
 
-    fn alr(&mut self, info: &Info) {
+    fn alr(&mut self, _info: &Info) {
         unimplemented!()
     }
 
-    fn anc(&mut self, info: &Info) {
+    fn anc(&mut self, _info: &Info) {
         unimplemented!()
     }
 
-    fn arr(&mut self, info: &Info) {
+    fn arr(&mut self, _info: &Info) {
         unimplemented!()
     }
 
-    fn axs(&mut self, info: &Info) {
+    fn axs(&mut self, _info: &Info) {
         unimplemented!()
     }
 
@@ -1083,7 +1083,7 @@ impl<T: Mapper> CPU<T> {
         self.cmp(info);
     }
 
-    fn las(&mut self, info: &Info) {
+    fn las(&mut self, _info: &Info) {
         unimplemented!()
     }
 
@@ -1123,15 +1123,15 @@ impl<T: Mapper> CPU<T> {
         self.write8(info.addr, self.A & self.X)
     }
 
-    fn sha(&mut self, info: &Info) {
+    fn sha(&mut self, _info: &Info) {
         unimplemented!()
     }
 
-    fn shx(&mut self, info: &Info) {
+    fn shx(&mut self, _info: &Info) {
         unimplemented!()
     }
 
-    fn shy(&mut self, info: &Info) {
+    fn shy(&mut self, _info: &Info) {
         unimplemented!()
     }
 
@@ -1153,11 +1153,11 @@ impl<T: Mapper> CPU<T> {
         self.eor(info);
     }
 
-    fn tas(&mut self, info: &Info) {
+    fn tas(&mut self, _info: &Info) {
         unimplemented!()
     }
 
-    fn xaa(&mut self, info: &Info) {
+    fn xaa(&mut self, _info: &Info) {
         unimplemented!()
     }
 
@@ -1174,7 +1174,7 @@ impl<T: Mapper> CPU<T> {
         self.sbc(info);
     }
 
-    fn kil(&mut self, info: &Info) {
+    fn kil(&mut self, _info: &Info) {
         unimplemented!()
     }
 

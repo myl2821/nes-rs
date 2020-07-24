@@ -1,10 +1,14 @@
 extern crate sdl2;
 
+use nes::{Bus, Cartridge, Mapper0, CPU, PPU};
 use sdl2::event::Event;
 use sdl2::keyboard::Keycode;
-use sdl2::pixels::Color;
 use sdl2::rect::Point;
+use std::path::Path;
 use std::time::{Duration, Instant, SystemTime};
+
+use std::cell::RefCell;
+use std::rc::Rc;
 
 const SCREEN_WIDTH: u32 = 256;
 const SCREEN_HEIGHT: u32 = 240;
@@ -16,6 +20,22 @@ fn main() {
 }
 
 fn draw() {
+    let path = Path::new("tests/fixture/nestest.nes");
+    let cartridge = Cartridge::new(path).unwrap();
+    let mapper0 = Rc::new(RefCell::new(Mapper0::new(cartridge)));
+
+    let cpu = Rc::new(RefCell::new(CPU::new()));
+    let ppu = Rc::new(RefCell::new(PPU::new(mapper0.clone())));
+    let bus = Rc::new(RefCell::new(Bus::new(
+        mapper0.clone(),
+        cpu.clone(),
+        ppu.clone(),
+    )));
+    cpu.borrow_mut().connect_bus(bus.clone());
+    ppu.borrow_mut().connect_bus(bus.clone());
+
+    cpu.borrow_mut().reset();
+
     let sdl_context = sdl2::init().unwrap();
     let ev = sdl_context.event().unwrap();
     let video_subsystem = sdl_context.video().unwrap();
@@ -49,19 +69,32 @@ fn draw() {
             }
         }
 
-        canvas.set_draw_color(Color::RGB(0, 0, 0));
-        canvas.clear();
+        //canvas.set_draw_color(Color::RGB(0, 0, 0));
+        //canvas.clear();
 
-        // The rest of the game loop goes here...
-
-        i = (i + 1) % 255;
-        canvas.set_draw_color(Color::RGB(0, 64, i));
-        for x in 64..192 {
-            for y in 60..180 {
-                let pt = Point::new(x, y);
-                canvas.draw_point(pt);
+        let mut x: u32 = 0;
+        let mut y: u32 = 0;
+        loop {
+            let cpu_cycles = cpu.borrow_mut().step();
+            //println!("{}", cpu.borrow().debug_info().0);
+            for _ in 0..(cpu_cycles * 3) {
+                ppu.borrow_mut().step();
+                let pixel = ppu.borrow().back;
+                canvas.set_draw_color(pixel.c);
+                canvas.draw_point(Point::new(pixel.x as i32, pixel.y as i32));
+                x = pixel.x;
+                y = pixel.y;
+                //println!("{:?}", pixel);
+                if x == 255 && y == 240 {
+                    break;
+                }
+            }
+            if x == 255 && y == 240 {
+                break;
             }
         }
+
+        // The rest of the game loop goes here...
 
         canvas.present();
 
