@@ -48,7 +48,24 @@ pub struct Pixel {
 
 // http://wiki.nesdev.com/w/index.php/PPU_programmer_reference
 // http://wiki.nesdev.com/w/index.php/PPU_scrolling
+// PPU Memory map
+// -------------------------------------------------------------------------------------------------
+// Address range |  Size   |  Device
+// $0000-$1FFF   |  $2000  |  8KB Pattern Tables, VRAM, CHR ROM
+// $2000-$23FF   |  $0400  |  Name Table 0
+// $2400-$27FF   |  $0400  |  Name Table 1
+// $2800-$2BFF   |  $0400  |  Name Table 2
+// $2C00-$2FFF   |  $0400  |  Name Table 3
+// $3000-$3EFF   |  $0800  |  Mirrors of $2000-$2EFF
+// $3F00-$3F0F   |  $0010  |  Image Palette
+// $3F10-$3F1F   |  $0010  |  Sprite Palette
+// $3F20-$3FFF   |  $00E0  |  Mirrors of $3F00-$3F1F
+// $4000-$FFFF   |  $C000  |  Mirrors of $0000-$3FFF
 pub struct PPU<T: Mapper> {
+    name_table: [u8; 0x1000], // 4KB
+    palette: [u8; 0x0020],    // 32B
+    mapper: Rc<RefCell<T>>,
+
     ctrl: CtrlFlag,         // 0x2000  PPU Control Register
     mask: MaskFlag,         // 0x2001  PPU Mask Register
     status: StatusFlag,     // 0x2002  PPU status register
@@ -73,7 +90,7 @@ pub struct PPU<T: Mapper> {
     pattern_table_tile_low: u8,  // cycle%8 = 5
     pattern_table_tile_high: u8, // cycle%8 = 7
 
-    tiles: [u8; 8], // 2 bytes of pattern_table, represent 8 tiles color
+    tiles: u64,
 
     pub front: Pixel,
     pub back: Pixel,
@@ -82,13 +99,17 @@ pub struct PPU<T: Mapper> {
     cycle: u32,    // 0-340
 
     delay: u8,
+    previous: bool,
 
     bus: Option<Rc<RefCell<Bus<T>>>>,
 }
 
 impl<T: Mapper> PPU<T> {
-    pub fn new() -> Self {
+    pub fn new(mapper: Rc<RefCell<T>>) -> Self {
         let mut ppu = Self {
+            name_table: [0; 0x1000],
+            palette: [0; 0x0020],
+            mapper: mapper,
             ctrl: CtrlFlag::empty(),
             mask: MaskFlag::empty(),
             status: StatusFlag::empty(),
@@ -103,7 +124,7 @@ impl<T: Mapper> PPU<T> {
             attribute_table_byte: 0x00,
             pattern_table_tile_low: 0x00,
             pattern_table_tile_high: 0x00,
-            tiles: [0; 8],
+            tiles: 0,
             front: Pixel {
                 x: 0,
                 y: 0,
@@ -117,22 +138,43 @@ impl<T: Mapper> PPU<T> {
             scanline: 0,
             cycle: 0,
             delay: 0x00,
+            previous: false,
             bus: None,
         };
         ppu.reset();
         ppu
     }
 
+    pub fn n_change(&mut self) {
+        let n = self.ctrl.contains(CtrlFlag::nmi) && self.status.contains(StatusFlag::v_blank);
+        if n && !self.previous {
+            self.delay = 20
+        }
+        self.previous = n
+    }
+
     pub fn connect_bus(&mut self, bus: Rc<RefCell<Bus<T>>>) {
         self.bus = Some(bus);
     }
 
-    pub fn read8(&self, addr: u16) -> u8 {
-        self.bus.as_ref().unwrap().borrow_mut().ppu_read8(addr)
+    pub fn read8(&self, d: u16) -> u8 {
+        let addr = d & 0x3fff;
+        match addr {
+            0..=0x1fff => self.mapper.borrow().read(addr),
+            0x2000..=0x3eff => self.name_table[(addr & 0x0fff) as usize],
+            0x3f00..=0x3fff => self.read_palette(addr % 32), //self.palette[(addr % 0x001f) as usize],
+            _ => panic!(),
+        }
     }
 
-    pub fn write8(&mut self, addr: u16, v: u8) {
-        self.bus.as_ref().unwrap().borrow_mut().ppu_write8(addr, v);
+    pub fn write8(&mut self, d: u16, v: u8) {
+        let addr = d & 0x3fff;
+        match addr {
+            0..=0x1fff => self.mapper.borrow_mut().write(addr, v),
+            0x2000..=0x3eff => self.name_table[(addr & 0x0fff) as usize] = v,
+            0x3f00..=0x3fff => self.write_palette(addr % 32, v), //self.palette[(addr % 0x001f) as usize] = v,
+            _ => panic!(),
+        }
     }
 
     // Reading any readable port (PPUSTATUS 0x2002, OAMDATA 0x2004, or PPUDATA 0x2007) also fills the latch with the bits read.
@@ -143,6 +185,22 @@ impl<T: Mapper> PPU<T> {
             0x2007 => self.read_data(),
             _ => panic!(),
         }
+    }
+
+    fn read_palette(&self, addr: u16) -> u8 {
+        let mut new_addr = addr;
+        if addr >= 16 && addr % 4 == 0 {
+            new_addr -= 16
+        }
+        self.palette[new_addr as usize]
+    }
+
+    fn write_palette(&mut self, addr: u16, v: u8) {
+        let mut new_addr = addr;
+        if addr >= 16 && addr % 4 == 0 {
+            new_addr -= 16
+        }
+        self.palette[new_addr as usize] = v
     }
 
     // Writing any value to any PPU port, even to the nominally read-only PPUSTATUS, will fill this latch.
@@ -199,12 +257,12 @@ impl<T: Mapper> PPU<T> {
     pub fn step(&mut self) {
         self.tik();
         // FIXME: just test
-        println!("cycle: {:?}, scanline: {:?}, enable_render: {:?}, mask: {:?}, ctrl: {:?}, status: {:?} v: {:04X} t: {:04X}",
-            self.cycle, self.scanline, self.enable_render(), self.mask, self.ctrl, self.status, self.v, self.t);
+        //println!("cycle: {:?}, scanline: {:?}, enable_render: {:?}, mask: {:?}, ctrl: {:?}, status: {:?} v: {:04X} t: {:04X}",
+        //    self.cycle, self.scanline, self.enable_render(), self.mask, self.ctrl, self.status, self.v, self.t);
 
         match self.scanline {
-            // Visible scanlines (0-239)
-            0..=239 => {
+            // Scanlines (0-240)
+            0..=240 => {
                 if self.enable_render() {
                     match self.cycle {
                         // Cycle 0: This is an idle cycle.
@@ -228,13 +286,11 @@ impl<T: Mapper> PPU<T> {
                             self.fetch_tile_process();
                         }
                         // Cycles 337-340: Two bytes are fetched, but the purpose for this is unknown.
-                        337..=340 => todo!(),
+                        337..=340 => (),
                         _ => panic!(),
                     }
                 }
             }
-            //The PPU just idles during this scanline.
-            240 => (),
             // Vertical blanking lines
             241..=260 => {
                 if self.scanline == 241 && self.cycle == 1 {
@@ -278,6 +334,7 @@ impl<T: Mapper> PPU<T> {
     }
 
     fn fetch_tile_process(&mut self) {
+        self.tiles <<= 4;
         match self.cycle % 8 {
             1 => self.name_table_byte(),
             3 => self.attribute_table_byte(),
@@ -300,10 +357,12 @@ impl<T: Mapper> PPU<T> {
         self.back = self.front;
         self.front = tmp;
         self.status.insert(StatusFlag::v_blank);
+        self.n_change()
     }
 
     fn clear_v_blank(&mut self) {
         self.status.remove(StatusFlag::v_blank);
+        self.n_change()
     }
 
     fn render_pixel(&mut self) {
@@ -314,7 +373,7 @@ impl<T: Mapper> PPU<T> {
             x: x,
             y: y,
             c: bg_color,
-        }
+        };
     }
 
     // 0x2002
@@ -323,6 +382,7 @@ impl<T: Mapper> PPU<T> {
     fn read_status(&mut self) -> u8 {
         let result = self.status.bits;
         self.status.remove(StatusFlag::v_blank);
+        self.n_change();
         self.w = 0;
         result
     }
@@ -370,6 +430,7 @@ impl<T: Mapper> PPU<T> {
     // t: ...BA.. ........ = d: ......BA
     fn write_ctrl(&mut self, d: u8) {
         self.ctrl = CtrlFlag::from_bits(d).unwrap();
+        self.n_change();
         self.t = (self.t & 0b11110011_11111111) | (((d & 0b00000011) as u16) << 10)
     }
 
@@ -543,7 +604,7 @@ impl<T: Mapper> PPU<T> {
     fn attribute_table_byte(&mut self) {
         let attribute = self.read8(self.attribute_table_addr());
         let shift = ((self.v >> 4) & 0x04) | (self.v & 0x02);
-        self.attribute_table_byte = (attribute >> shift) & 0x03
+        self.attribute_table_byte = ((attribute >> shift) & 0x03) << 2;
     }
 
     // DCBA98 76543210
@@ -556,13 +617,13 @@ impl<T: Mapper> PPU<T> {
     // |+-------------- H: Half of sprite table (0: "left"; 1: "right")
     // +--------------- 0: Pattern table is at $0000-$1FFF
     fn pattern_table_addr(&self) -> u16 {
-        let half = match self.ctrl.contains(CtrlFlag::bg_tbl) {
+        let bg_tbl = match self.ctrl.contains(CtrlFlag::bg_tbl) {
             true => 0x1000,
             false => 0x0000,
         };
         let tile = self.name_table_byte as u16;
         let fine_y = (self.v >> 12) & 0x07;
-        (half << 12) | (tile << 4) | fine_y
+        bg_tbl | (tile << 4) | fine_y
     }
 
     // Get Palette index bit 0
@@ -572,26 +633,31 @@ impl<T: Mapper> PPU<T> {
 
     // Get Palette index bit 1
     fn pattern_table_tile_high(&mut self) {
-        self.pattern_table_tile_high = self.read8(self.pattern_table_addr() + 8)
+        self.pattern_table_tile_high = self.read8(self.pattern_table_addr() + 8);
     }
 
     fn tiles(&mut self) {
         let plane_0 = self.pattern_table_tile_low;
         let plane_1 = self.pattern_table_tile_high;
+        let mut data: u32 = 0;
         for i in 0..=7 {
+            let a = self.attribute_table_byte;
             let bit0 = (plane_0 >> (7 - i)) & 0x01;
             let bit1 = ((plane_1 >> (7 - i)) & 0x01) << 1;
-            self.tiles[i] = bit1 | bit0;
+            data <<= 4;
+            data |= (a | bit1 | bit0) as u32;
         }
+        self.tiles |= data as u64
     }
 
     // Background palette address
     fn bg_palette_addr(&self) -> u16 {
-        0x3F00 | (self.attribute_table_byte << 2) as u16 | self.tiles[self.x as usize] as u16
+        let data = ((self.tiles >> 32) as u32) >> ((7 - self.x) * 4);
+        0x3f00 + (data & 0x0f) as u16
     }
 
     fn bg_color(&self) -> Color {
-        PALETTE[self.read8(self.bg_palette_addr()) as usize]
+        PALETTE[(self.read8(self.bg_palette_addr()) % 64) as usize]
     }
 }
 
