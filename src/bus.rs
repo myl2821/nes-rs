@@ -1,5 +1,5 @@
 use crate::ppu::PPU;
-use crate::{Mapper, CPU};
+use crate::Mapper;
 use std::cell::RefCell;
 
 pub struct Bus<T: Mapper> {
@@ -47,24 +47,36 @@ impl<T: Mapper> Bus<T> {
         }
     }
 
-    pub fn cpu_write8(&mut self, addr: u16, v: u8) {
+    pub fn cpu_write8(&mut self, addr: u16, v: u8) -> bool {
+        let mut need_suspend = false;
         match addr {
             0..=0x1fff => {
                 let a = addr & 0x07ff;
                 self.ram[a as usize] = v;
             }
-            0x2000..=0x3fff => todo!(), /*{
-            self.ppu
-            .borrow_mut()
-            .write_register(self, 0x2000 | (addr & 0x0007), v)
-            }*/
+            0x2000..=0x3fff => self
+                .ppu
+                .borrow_mut()
+                .write_register(0x2000 | (addr & 0x0007), v),
             0x4000..=0x4013 => (), //FIXME todo!(),
-            0x4014 => todo!(),     // self.ppu.borrow_mut().write_register(self, addr, v),
-            0x4015 => (),          //FIXME todo!(),
-            0x4016 => (),          //todo!(), contrller not impl
-            0x4017 => (),          //todo!(),
+            0x4014 => {
+                let mut addr = (v as u16) << 8;
+                let mut oam_data = [0; 256];
+                let mut oam_addr = self.ppu.borrow().oam_addr;
+                for _i in 0..256 {
+                    oam_data[oam_addr as usize] = self.cpu_read8(addr);
+                    oam_addr = oam_addr.wrapping_add(1);
+                    addr += 1;
+                }
+                self.ppu.borrow_mut().write_dma(oam_addr, oam_data);
+                need_suspend = true;
+            }
+            0x4015 => (), //FIXME todo!(),
+            0x4016 => (), //todo!(), contrller not impl
+            0x4017 => (), //todo!(),
             0x4018..=0x401f => todo!(),
             0x4020..=0xffff => self.ppu.borrow_mut().mapper.write(addr, v),
         }
+        need_suspend
     }
 }

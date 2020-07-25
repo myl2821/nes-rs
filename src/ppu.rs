@@ -1,9 +1,7 @@
 // http://wiki.nesdev.com/w/index.php/PPU_programmer_reference
 
-use crate::{Bus, Mapper, PALETTE};
+use crate::{Interrupt, Mapper, PALETTE};
 use sdl2::pixels::Color;
-use std::cell::RefCell;
-use std::rc::Rc;
 
 bitflags! {
     pub struct CtrlFlag: u8 {
@@ -39,11 +37,6 @@ bitflags! {
     }
 }
 
-pub enum Interrupt {
-    None,
-    NMI,
-}
-
 #[derive(Debug, Clone, Copy)]
 pub struct Pixel {
     pub x: u32,
@@ -74,7 +67,7 @@ pub struct PPU<M: Mapper> {
     ctrl: CtrlFlag,         // 0x2000  PPU Control Register
     mask: MaskFlag,         // 0x2001  PPU Mask Register
     status: StatusFlag,     // 0x2002  PPU status register
-    oam_addr: u8,           // 0x2003  OAM address port
+    pub oam_addr: u8,       // 0x2003  OAM address port
     oam_data: [u8; 0x0100], // 0x2004 OAM data port
     data: u8,               // 0x2007 PPU data port. The PPUDATA read buffer
 
@@ -212,13 +205,12 @@ impl<M: Mapper> PPU<M> {
             0x2005 => self.write_scroll(v),
             0x2006 => self.write_addr(v),
             0x2007 => self.write_data(v),
-            0x4014 => self.write_dma(v),
             _ => panic!(),
         }
     }
 
-    fn tik(&mut self) -> Interrupt {
-        let mut interrupt = Interrupt::None;
+    fn tick(&mut self) -> Interrupt {
+        let mut interrupt = Interrupt::NONE;
 
         if self.delay > 0 {
             self.delay -= 1;
@@ -251,8 +243,8 @@ impl<M: Mapper> PPU<M> {
     }
 
     // http://wiki.nesdev.com/w/index.php/PPU_rendering
-    pub fn step(&mut self) {
-        self.tik();
+    pub fn step(&mut self) -> Interrupt {
+        let interrupt = self.tick();
         // FIXME: just test
         //println!("cycle: {:?}, scanline: {:?}, enable_render: {:?}, mask: {:?}, ctrl: {:?}, status: {:?} v: {:04X} t: {:04X}",
         //    self.cycle, self.scanline, self.enable_render(), self.mask, self.ctrl, self.status, self.v, self.t);
@@ -320,6 +312,7 @@ impl<M: Mapper> PPU<M> {
             }
             _ => panic!(),
         }
+        interrupt
     }
 
     fn reset(&mut self) {
@@ -505,23 +498,9 @@ impl<M: Mapper> PPU<M> {
     // then 256 alternating read/write cycles.)
     //
     // The DMA transfer will begin at the current OAM write address.
-    fn write_dma(&mut self, d: u8) {
-        let mut addr = (d as u16) << 8;
-        // let bus = self.bus.as_ref().unwrap();
-        // let cpu = &bus.borrow_mut().cpu;
-        /*
-        for _i in 0..256 {
-            self.oam_data[self.oam_addr as usize] = bus.cpu_read8(addr);
-            self.oam_addr = self.oam_addr.wrapping_add(1);
-            addr += 1;
-        }
-         */
-        /*
-           cpu.borrow_mut().suspend += 513;
-           if cpu.borrow_mut().cycles & 1 == 1 {
-               cpu.borrow_mut().suspend += 1
-           }
-        */
+    pub fn write_dma(&mut self, oam_addr: u8, oam_data: [u8; 256]) {
+        self.oam_addr = oam_addr;
+        self.oam_data = oam_data;
     }
 
     // The coarse X component of v needs to be incremented when the next tile is reached.

@@ -1,6 +1,4 @@
 use crate::{Bus, Mapper};
-use std::cell::RefCell;
-use std::rc::Rc;
 
 const VERCTOR_NMI: u16 = 0xFFFA;
 const VERCTOR_RST: u16 = 0xFFFC;
@@ -67,7 +65,7 @@ pub struct CPU<T: Mapper> {
     //  CPU is suspended during transfer CPU page to PPU OAM
     pub suspend: u64,
 
-    bus: Bus<T>,
+    pub bus: Bus<T>,
 }
 
 // Address Modes:
@@ -119,7 +117,7 @@ impl Default for Mode {
     }
 }
 
-enum Interrupt {
+pub enum Interrupt {
     NMI,
     IRQ,
     NONE,
@@ -164,7 +162,9 @@ impl<T: Mapper> CPU<T> {
     }
 
     pub fn write8(&mut self, addr: u16, v: u8) {
-        self.bus.cpu_write8(addr, v)
+        if self.bus.cpu_write8(addr, v) {
+            self.suspend()
+        }
     }
 
     pub fn read16(&self, addr: u16) -> u16 {
@@ -220,6 +220,13 @@ impl<T: Mapper> CPU<T> {
     pub fn set_irq(&mut self) {
         if self.without_flag(F::I) {
             self.interrupt = Interrupt::IRQ
+        }
+    }
+
+    pub fn suspend(&mut self) {
+        self.suspend += 513;
+        if self.cycles & 1 == 1 {
+            self.suspend += 1
         }
     }
 
