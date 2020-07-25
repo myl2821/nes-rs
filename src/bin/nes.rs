@@ -94,12 +94,14 @@ fn draw(rom_path: String) {
                     break;
                 }
                 canvas.set_draw_color(pixel.c);
-                canvas.fill_rect(Rect::new(
-                    (pixel.x * SCAIL) as i32,
-                    (pixel.y * SCAIL) as i32,
-                    SCAIL,
-                    SCAIL,
-                ));
+                canvas
+                    .fill_rect(Rect::new(
+                        (pixel.x * SCAIL) as i32,
+                        (pixel.y * SCAIL) as i32,
+                        SCAIL,
+                        SCAIL,
+                    ))
+                    .unwrap();
             }
             if x >= 255 && y >= 240 {
                 break;
