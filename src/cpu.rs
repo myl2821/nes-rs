@@ -67,7 +67,7 @@ pub struct CPU<T: Mapper> {
     //  CPU is suspended during transfer CPU page to PPU OAM
     pub suspend: u64,
 
-    bus: Option<Rc<RefCell<Bus<T>>>>,
+    bus: Bus<T>,
 }
 
 // Address Modes:
@@ -141,7 +141,7 @@ struct Info {
 }
 
 impl<T: Mapper> CPU<T> {
-    pub fn new() -> Self {
+    pub fn new(bus: Bus<T>) -> Self {
         let mut cpu = CPU {
             PC: 0x0000,
             SP: 0x00,
@@ -153,23 +153,18 @@ impl<T: Mapper> CPU<T> {
             cycles: 0,
             suspend: 0,
             interrupt: Interrupt::NONE,
-            bus: None,
+            bus,
         };
         cpu.init_ins_table();
         cpu
     }
 
-    pub fn connect_bus(&mut self, bus: Rc<RefCell<Bus<T>>>) {
-        self.bus = Some(bus);
-        self.reset();
-    }
-
     pub fn read8(&self, addr: u16) -> u8 {
-        self.bus.as_ref().unwrap().borrow_mut().cpu_read8(addr)
+        self.bus.cpu_read8(addr)
     }
 
     pub fn write8(&mut self, addr: u16, v: u8) {
-        self.bus.as_ref().unwrap().borrow_mut().cpu_write8(addr, v)
+        self.bus.cpu_write8(addr, v)
     }
 
     pub fn read16(&self, addr: u16) -> u16 {

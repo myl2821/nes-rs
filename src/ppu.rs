@@ -39,6 +39,11 @@ bitflags! {
     }
 }
 
+pub enum Interrupt {
+    None,
+    NMI,
+}
+
 #[derive(Debug, Clone, Copy)]
 pub struct Pixel {
     pub x: u32,
@@ -212,30 +217,24 @@ impl<M: Mapper> PPU<M> {
         }
     }
 
-    fn tik(&mut self) {
-        /*
+    fn tik(&mut self) -> Interrupt {
+        let mut interrupt = Interrupt::None;
+
         if self.delay > 0 {
             self.delay -= 1;
             if self.delay == 0
                 && self.ctrl.contains(CtrlFlag::nmi)
                 && self.status.contains(StatusFlag::v_blank)
             {
-                self.bus
-                    .as_ref()
-                    .unwrap()
-                    .borrow_mut()
-                    .cpu
-                    .borrow_mut()
-                    .set_nmi();
+                interrupt = Interrupt::NMI;
             }
         }
-        */
 
         if self.enable_render() {
             if self.scanline == 261 && self.cycle == 339 {
                 self.cycle = 0;
                 self.scanline = 0;
-                return;
+                return interrupt;
             }
         }
 
@@ -247,6 +246,8 @@ impl<M: Mapper> PPU<M> {
                 self.scanline = 0;
             }
         }
+
+        return interrupt;
     }
 
     // http://wiki.nesdev.com/w/index.php/PPU_rendering

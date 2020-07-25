@@ -29,14 +29,12 @@ fn main() {
 fn draw(rom_path: String) {
     let path = Path::new(&rom_path);
     let cartridge = Cartridge::new(path).unwrap();
-    let mapper0 = Mapper0::new(cartridge);
+    let mut mapper0 = Mapper0::new(cartridge);
 
-    let cpu = Rc::new(RefCell::new(CPU::new()));
-    let ppu = PPU::new(mapper0);
-    let bus = Rc::new(RefCell::new(Bus::new(ppu)));
-    cpu.borrow_mut().connect_bus(bus.clone());
-
-    cpu.borrow_mut().reset();
+    let mut ppu = PPU::new(mapper0);
+    let mut bus = Bus::new(ppu);
+    let mut cpu = CPU::new(bus);
+    cpu.reset();
 
     let sdl_context = sdl2::init().unwrap();
     let ev = sdl_context.event().unwrap();
