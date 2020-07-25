@@ -3,13 +3,14 @@ extern crate sdl2;
 use nes::{Bus, Cartridge, Interrupt, Mapper0, CPU, PPU};
 use sdl2::event::Event;
 use sdl2::keyboard::Keycode;
-use sdl2::rect::Point;
+use sdl2::rect::Rect;
 use std::path::Path;
 use std::time::{Duration, Instant, SystemTime};
 
 use sdl2::pixels::Color;
 use std::env::args;
 
+const SCAIL: u32 = 2;
 const SCREEN_WIDTH: u32 = 256;
 const SCREEN_HEIGHT: u32 = 240;
 const FPS: u32 = 60;
@@ -39,7 +40,11 @@ fn draw(rom_path: String) {
     let video_subsystem = sdl_context.video().unwrap();
 
     let window = video_subsystem
-        .window("rust-sdl2 demo", SCREEN_WIDTH, SCREEN_HEIGHT)
+        .window(
+            "rust-sdl2 demo",
+            SCREEN_WIDTH * SCAIL,
+            SCREEN_HEIGHT * SCAIL,
+        )
         .position_centered()
         .build()
         .unwrap();
@@ -89,7 +94,12 @@ fn draw(rom_path: String) {
                     break;
                 }
                 canvas.set_draw_color(pixel.c);
-                canvas.draw_point(Point::new(pixel.x as i32, pixel.y as i32));
+                canvas.fill_rect(Rect::new(
+                    (pixel.x * SCAIL) as i32,
+                    (pixel.y * SCAIL) as i32,
+                    SCAIL,
+                    SCAIL,
+                ));
             }
             if x >= 255 && y >= 240 {
                 break;
