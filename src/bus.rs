@@ -5,17 +5,13 @@ use std::rc::Rc;
 
 pub struct Bus<T: Mapper> {
     ram: [u8; 0x0800], // 2KB
-    mapper: Rc<RefCell<T>>,
-    pub cpu: Rc<RefCell<CPU<T>>>,
-    ppu: PPU<T>,
+    pub ppu: PPU<T>,
 }
 
 impl<T: Mapper> Bus<T> {
-    pub fn new(mapper: Rc<RefCell<T>>, cpu: Rc<RefCell<CPU<T>>>, ppu: PPU<T>) -> Self {
+    pub fn new(ppu: PPU<T>) -> Self {
         Self {
             ram: [0; 0x0800],
-            mapper: mapper,
-            cpu: cpu,
             ppu: ppu,
         }
     }
@@ -45,7 +41,7 @@ impl<T: Mapper> Bus<T> {
             0x4016 => 0, //todo!(),contrller not impl
             0x4017 => todo!(),
             0x4018..=0x401f => 0, // normally disabled, maybe should return Err
-            0x4020..=0xffff => self.mapper.borrow().read(addr),
+            0x4020..=0xffff => self.ppu.mapper.read(addr),
         }
     }
 
@@ -66,7 +62,7 @@ impl<T: Mapper> Bus<T> {
             0x4016 => (),          //todo!(), contrller not impl
             0x4017 => (),          //todo!(),
             0x4018..=0x401f => todo!(),
-            0x4020..=0xffff => self.mapper.borrow_mut().write(addr, v),
+            0x4020..=0xffff => self.ppu.mapper.write(addr, v),
         }
     }
 }

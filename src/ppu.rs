@@ -61,11 +61,11 @@ pub struct Pixel {
 // $3F10-$3F1F   |  $0010  |  Sprite Palette
 // $3F20-$3FFF   |  $00E0  |  Mirrors of $3F00-$3F1F
 // $4000-$FFFF   |  $C000  |  Mirrors of $0000-$3FFF
-pub struct PPU<T: Mapper> {
+pub struct PPU<M: Mapper> {
     name_table: [u8; 0x1000], // 4KB
     palette: [u8; 0x0020],    // 32B
-    mapper: Rc<RefCell<T>>,
 
+    pub mapper: M,
     ctrl: CtrlFlag,         // 0x2000  PPU Control Register
     mask: MaskFlag,         // 0x2001  PPU Mask Register
     status: StatusFlag,     // 0x2002  PPU status register
@@ -103,8 +103,8 @@ pub struct PPU<T: Mapper> {
     // bus: Option<Rc<RefCell<Bus<T>>>>,
 }
 
-impl<T: Mapper> PPU<T> {
-    pub fn new(mapper: Rc<RefCell<T>>) -> Self {
+impl<M: Mapper> PPU<M> {
+    pub fn new(mapper: M) -> Self {
         let mut ppu = Self {
             name_table: [0; 0x1000],
             palette: [0; 0x0020],
@@ -138,7 +138,6 @@ impl<T: Mapper> PPU<T> {
             cycle: 0,
             delay: 0x00,
             previous: false,
-            // bus: None,
         };
         ppu.reset();
         ppu
@@ -152,14 +151,10 @@ impl<T: Mapper> PPU<T> {
         self.previous = n
     }
 
-    // pub fn connect_bus(&mut self, bus: Rc<RefCell<Bus<T>>>) {
-    //     self.bus = Some(bus);
-    // }
-
     pub fn read8(&self, d: u16) -> u8 {
         let addr = d & 0x3fff;
         match addr {
-            0..=0x1fff => self.mapper.borrow().read(addr),
+            0..=0x1fff => self.mapper.read(addr),
             0x2000..=0x3eff => self.name_table[(addr & 0x0fff) as usize],
             0x3f00..=0x3fff => self.read_palette(addr % 32), //self.palette[(addr % 0x001f) as usize],
             _ => panic!(),
@@ -169,7 +164,7 @@ impl<T: Mapper> PPU<T> {
     pub fn write8(&mut self, d: u16, v: u8) {
         let addr = d & 0x3fff;
         match addr {
-            0..=0x1fff => self.mapper.borrow_mut().write(addr, v),
+            0..=0x1fff => self.mapper.write(addr, v),
             0x2000..=0x3eff => self.name_table[(addr & 0x0fff) as usize] = v,
             0x3f00..=0x3fff => self.write_palette(addr % 32, v), //self.palette[(addr % 0x001f) as usize] = v,
             _ => panic!(),
@@ -203,7 +198,7 @@ impl<T: Mapper> PPU<T> {
     }
 
     // Writing any value to any PPU port, even to the nominally read-only PPUSTATUS, will fill this latch.
-    pub fn write_register<M: Mapper>(&mut self, bus: &mut Bus<M>, addr: u16, v: u8) {
+    pub fn write_register(&mut self, addr: u16, v: u8) {
         match addr {
             0x2000 => self.write_ctrl(v),
             0x2001 => self.write_mask(v),
@@ -212,7 +207,7 @@ impl<T: Mapper> PPU<T> {
             0x2005 => self.write_scroll(v),
             0x2006 => self.write_addr(v),
             0x2007 => self.write_data(v),
-            0x4014 => self.write_dma(bus, v),
+            0x4014 => self.write_dma(v),
             _ => panic!(),
         }
     }
@@ -509,15 +504,17 @@ impl<T: Mapper> PPU<T> {
     // then 256 alternating read/write cycles.)
     //
     // The DMA transfer will begin at the current OAM write address.
-    fn write_dma<M: Mapper>(&mut self, bus: &mut Bus<M>, d: u8) {
+    fn write_dma(&mut self, d: u8) {
         let mut addr = (d as u16) << 8;
         // let bus = self.bus.as_ref().unwrap();
         // let cpu = &bus.borrow_mut().cpu;
+        /*
         for _i in 0..256 {
             self.oam_data[self.oam_addr as usize] = bus.cpu_read8(addr);
             self.oam_addr = self.oam_addr.wrapping_add(1);
             addr += 1;
         }
+         */
         /*
            cpu.borrow_mut().suspend += 513;
            if cpu.borrow_mut().cycles & 1 == 1 {
