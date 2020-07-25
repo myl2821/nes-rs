@@ -100,8 +100,7 @@ pub struct PPU<T: Mapper> {
 
     delay: u8,
     previous: bool,
-
-    bus: Option<Rc<RefCell<Bus<T>>>>,
+    // bus: Option<Rc<RefCell<Bus<T>>>>,
 }
 
 impl<T: Mapper> PPU<T> {
@@ -139,7 +138,7 @@ impl<T: Mapper> PPU<T> {
             cycle: 0,
             delay: 0x00,
             previous: false,
-            bus: None,
+            // bus: None,
         };
         ppu.reset();
         ppu
@@ -153,9 +152,9 @@ impl<T: Mapper> PPU<T> {
         self.previous = n
     }
 
-    pub fn connect_bus(&mut self, bus: Rc<RefCell<Bus<T>>>) {
-        self.bus = Some(bus);
-    }
+    // pub fn connect_bus(&mut self, bus: Rc<RefCell<Bus<T>>>) {
+    //     self.bus = Some(bus);
+    // }
 
     pub fn read8(&self, d: u16) -> u8 {
         let addr = d & 0x3fff;
@@ -204,7 +203,7 @@ impl<T: Mapper> PPU<T> {
     }
 
     // Writing any value to any PPU port, even to the nominally read-only PPUSTATUS, will fill this latch.
-    pub fn write_register(&mut self, addr: u16, v: u8) {
+    pub fn write_register<M: Mapper>(&mut self, bus: &mut Bus<M>, addr: u16, v: u8) {
         match addr {
             0x2000 => self.write_ctrl(v),
             0x2001 => self.write_mask(v),
@@ -213,12 +212,13 @@ impl<T: Mapper> PPU<T> {
             0x2005 => self.write_scroll(v),
             0x2006 => self.write_addr(v),
             0x2007 => self.write_data(v),
-            0x4014 => self.write_dma(v),
+            0x4014 => self.write_dma(bus, v),
             _ => panic!(),
         }
     }
 
     fn tik(&mut self) {
+        /*
         if self.delay > 0 {
             self.delay -= 1;
             if self.delay == 0
@@ -234,6 +234,7 @@ impl<T: Mapper> PPU<T> {
                     .set_nmi();
             }
         }
+        */
 
         if self.enable_render() {
             if self.scanline == 261 && self.cycle == 339 {
@@ -508,19 +509,21 @@ impl<T: Mapper> PPU<T> {
     // then 256 alternating read/write cycles.)
     //
     // The DMA transfer will begin at the current OAM write address.
-    fn write_dma(&mut self, d: u8) {
+    fn write_dma<M: Mapper>(&mut self, bus: &mut Bus<M>, d: u8) {
         let mut addr = (d as u16) << 8;
-        let bus = self.bus.as_ref().unwrap();
-        let cpu = &bus.borrow_mut().cpu;
+        // let bus = self.bus.as_ref().unwrap();
+        // let cpu = &bus.borrow_mut().cpu;
         for _i in 0..256 {
-            self.oam_data[self.oam_addr as usize] = bus.borrow_mut().cpu_read8(addr);
+            self.oam_data[self.oam_addr as usize] = bus.cpu_read8(addr);
             self.oam_addr = self.oam_addr.wrapping_add(1);
             addr += 1;
         }
-        cpu.borrow_mut().suspend += 513;
-        if cpu.borrow_mut().cycles & 1 == 1 {
-            cpu.borrow_mut().suspend += 1
-        }
+        /*
+           cpu.borrow_mut().suspend += 513;
+           if cpu.borrow_mut().cycles & 1 == 1 {
+               cpu.borrow_mut().suspend += 1
+           }
+        */
     }
 
     // The coarse X component of v needs to be incremented when the next tile is reached.

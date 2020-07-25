@@ -7,11 +7,11 @@ pub struct Bus<T: Mapper> {
     ram: [u8; 0x0800], // 2KB
     mapper: Rc<RefCell<T>>,
     pub cpu: Rc<RefCell<CPU<T>>>,
-    ppu: Rc<RefCell<PPU<T>>>,
+    ppu: PPU<T>,
 }
 
 impl<T: Mapper> Bus<T> {
-    pub fn new(mapper: Rc<RefCell<T>>, cpu: Rc<RefCell<CPU<T>>>, ppu: Rc<RefCell<PPU<T>>>) -> Self {
+    pub fn new(mapper: Rc<RefCell<T>>, cpu: Rc<RefCell<CPU<T>>>, ppu: PPU<T>) -> Self {
         Self {
             ram: [0; 0x0800],
             mapper: mapper,
@@ -38,10 +38,7 @@ impl<T: Mapper> Bus<T> {
                 let a = addr & 0x07ff;
                 self.ram[a as usize]
             }
-            0x2000..=0x3fff => self
-                .ppu
-                .borrow_mut()
-                .read_register(0x2000 | (addr & 0x0007)),
+            0x2000..=0x3fff => self.ppu.read_register(0x2000 | (addr & 0x0007)),
             0x4000..=0x4013 => 0,
             0x4014 => todo!(),
             0x4015 => todo!(),
@@ -58,15 +55,16 @@ impl<T: Mapper> Bus<T> {
                 let a = addr & 0x07ff;
                 self.ram[a as usize] = v;
             }
-            0x2000..=0x3fff => self
-                .ppu
-                .borrow_mut()
-                .write_register(0x2000 | (addr & 0x0007), v),
+            0x2000..=0x3fff => todo!(), /*{
+            self.ppu
+            .borrow_mut()
+            .write_register(self, 0x2000 | (addr & 0x0007), v)
+            }*/
             0x4000..=0x4013 => (), //FIXME todo!(),
-            0x4014 => self.ppu.borrow_mut().write_register(addr, v),
-            0x4015 => (), //FIXME todo!(),
-            0x4016 => (), //todo!(), contrller not impl
-            0x4017 => (), //todo!(),
+            0x4014 => todo!(),     // self.ppu.borrow_mut().write_register(self, addr, v),
+            0x4015 => (),          //FIXME todo!(),
+            0x4016 => (),          //todo!(), contrller not impl
+            0x4017 => (),          //todo!(),
             0x4018..=0x401f => todo!(),
             0x4020..=0xffff => self.mapper.borrow_mut().write(addr, v),
         }
