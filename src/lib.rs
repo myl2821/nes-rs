@@ -15,7 +15,7 @@ mod ppu;
 
 pub use bus::Bus;
 pub use cartridge::{Cartridge, CartridgeHeader};
-pub use cpu::CPU;
+pub use cpu::{Interrupt, CPU};
 pub use mapper::{Mapper, Mapper0};
 pub use palette::PALETTE;
 pub use ppu::PPU;

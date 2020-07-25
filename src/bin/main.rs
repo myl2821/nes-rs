@@ -1,6 +1,6 @@
 extern crate sdl2;
 
-use nes::{Bus, Cartridge, Mapper0, CPU, PPU};
+use nes::{Bus, Cartridge, Interrupt, Mapper0, CPU, PPU};
 use sdl2::event::Event;
 use sdl2::keyboard::Keycode;
 use sdl2::rect::Point;
@@ -8,9 +8,7 @@ use std::path::Path;
 use std::time::{Duration, Instant, SystemTime};
 
 use sdl2::pixels::Color;
-use std::cell::RefCell;
 use std::env::args;
-use std::rc::Rc;
 
 const SCREEN_WIDTH: u32 = 256;
 const SCREEN_HEIGHT: u32 = 240;
@@ -29,10 +27,10 @@ fn main() {
 fn draw(rom_path: String) {
     let path = Path::new(&rom_path);
     let cartridge = Cartridge::new(path).unwrap();
-    let mut mapper0 = Mapper0::new(cartridge);
+    let mapper0 = Mapper0::new(cartridge);
 
-    let mut ppu = PPU::new(mapper0);
-    let mut bus = Bus::new(ppu);
+    let ppu = PPU::new(mapper0);
+    let bus = Bus::new(ppu);
     let mut cpu = CPU::new(bus);
     cpu.reset();
 
@@ -49,7 +47,6 @@ fn draw(rom_path: String) {
     let mut canvas = window.into_canvas().build().unwrap();
 
     let mut event_pump = sdl_context.event_pump().unwrap();
-    let mut i = 0;
 
     canvas.set_draw_color(Color::RGB(0, 0, 0));
     canvas.clear();
@@ -75,14 +72,17 @@ fn draw(rom_path: String) {
 
         let mut x: u32 = 0;
         let mut y: u32 = 0;
-        /*
         loop {
-            let cpu_cycles = cpu.borrow_mut().step();
-            //println!("{}", cpu.borrow().debug_info().0);
+            let cpu_cycles = cpu.step();
+            //println!("{}", cpu.debug_info().0);
 
             for _ in 0..(cpu_cycles * 3) {
-                bus.ppu.step();
-                let pixel = bus.ppu.back;
+                let interrupt = cpu.bus.ppu.borrow_mut().step();
+                match interrupt {
+                    Interrupt::NMI => cpu.set_nmi(),
+                    _ => (),
+                }
+                let pixel = cpu.bus.ppu.borrow_mut().back;
                 x = pixel.x;
                 y = pixel.y;
                 if x >= 255 && y >= 240 {
@@ -95,7 +95,6 @@ fn draw(rom_path: String) {
                 break;
             }
         }
-         */
 
         canvas.present();
 

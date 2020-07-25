@@ -5,8 +5,6 @@ use std::fs::File;
 use std::path::Path;
 
 use serde::Deserialize;
-use std::cell::RefCell;
-use std::rc::Rc;
 
 #[derive(Debug, Deserialize, PartialEq)]
 struct Status {
@@ -25,13 +23,12 @@ fn mapper0() {
     let path = Path::new("tests/fixture/nestest.nes");
     let cartridge = Cartridge::new(path).unwrap();
     let mapper0 = Mapper0::new(cartridge);
-    let cpu = Rc::new(RefCell::new(CPU::new()));
-    let ppu = Rc::new(RefCell::new(PPU::new()));
-    let bus = Rc::new(RefCell::new(Bus::new(mapper0, cpu.clone(), ppu.clone())));
-    cpu.borrow_mut().connect_bus(bus.clone());
-    ppu.borrow_mut().connect_bus(bus.clone());
 
-    assert_eq!(0xc004, cpu.borrow().rst());
+    let ppu = PPU::new(mapper0);
+    let bus = Bus::new(ppu);
+    let cpu = CPU::new(bus);
+
+    assert_eq!(0xc004, cpu.rst());
 }
 
 #[test]
@@ -40,24 +37,22 @@ fn compare_with_nestest() {
     let cartridge = Cartridge::new(path).unwrap();
     let mapper0 = Mapper0::new(cartridge);
 
-    let cpu = Rc::new(RefCell::new(CPU::new()));
-    let ppu = Rc::new(RefCell::new(PPU::new()));
-    let bus = Rc::new(RefCell::new(Bus::new(mapper0, cpu.clone(), ppu.clone())));
-    cpu.borrow_mut().connect_bus(bus.clone());
-    ppu.borrow_mut().connect_bus(bus.clone());
+    let ppu = PPU::new(mapper0);
+    let bus = Bus::new(ppu);
+    let mut cpu = CPU::new(bus);
 
     let mut i = 1;
     println!("check status before running line {}...", i);
 
-    cpu.borrow_mut().reset();
-    cpu.borrow_mut().set_PC(0xc000);
-    cpu.borrow_mut().set_cycles(7);
+    cpu.reset();
+    cpu.set_PC(0xc000);
+    cpu.set_cycles(7);
 
     let csv_file = File::open("tests/fixture/status.txt").unwrap();
     let mut rdr = csv::Reader::from_reader(csv_file);
     for result in rdr.deserialize() {
         let target: Status = result.unwrap();
-        match cpu.borrow().debug_info() {
+        match cpu.debug_info() {
             (s, addr, ins, a, x, y, p, sp, cyc) => {
                 let current = Status {
                     addr: format!("{:04X}", addr),
@@ -75,7 +70,7 @@ fn compare_with_nestest() {
             }
         }
         println!("execute line {}...\n", i);
-        cpu.borrow_mut().step();
+        cpu.step();
 
         i += 1;
         println!("check status before running line {}...", i);
