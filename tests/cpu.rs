@@ -1,6 +1,6 @@
 extern crate csv;
 
-use nes::{Bus, Cartridge, Mapper0, CPU, PPU};
+use nes::{new_mapper, Bus, Cartridge, Mapper0, CPU, PPU};
 use std::fs::File;
 use std::path::Path;
 
@@ -21,10 +21,9 @@ struct Status {
 #[test]
 fn mapper0() {
     let path = Path::new("tests/fixture/nestest.nes");
-    let cartridge = Cartridge::new(path).unwrap();
-    let mapper0 = Mapper0::new(cartridge);
+    let mapper = new_mapper(path).unwrap();
 
-    let ppu = PPU::new(mapper0);
+    let ppu = PPU::new(mapper);
     let bus = Bus::new(ppu);
     let cpu = CPU::new(bus);
 
@@ -34,10 +33,9 @@ fn mapper0() {
 #[test]
 fn compare_with_nestest() {
     let path = Path::new("tests/fixture/nestest.nes");
-    let cartridge = Cartridge::new(path).unwrap();
-    let mapper0 = Mapper0::new(cartridge);
+    let mapper = new_mapper(path).unwrap();
 
-    let ppu = PPU::new(mapper0);
+    let ppu = PPU::new(mapper);
     let bus = Bus::new(ppu);
     let mut cpu = CPU::new(bus);
 
