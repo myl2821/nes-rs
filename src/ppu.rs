@@ -386,7 +386,6 @@ impl<M: Mapper> PPU<M> {
         self.n_change()
     }
 
-
     // The palette for the background runs from VRAM $3F00 to $3F0F;
     // the palette for the sprites runs from $3F10 to $3F1F. Each color takes up one byte.
     // Address      Purpose
@@ -417,13 +416,13 @@ impl<M: Mapper> PPU<M> {
         if x < 8 && !self.mask.contains(MaskFlag::spr_left) {
             sprite_pixel = 0
         }
-        let b = bg_pixel%4 != 0;  // FIXME: not transparency
-        let s = sprite_pixel%4 != 0;  // FIXME: not transparency
+        let b = bg_pixel % 4 != 0; // FIXME: not transparency
+        let s = sprite_pixel % 4 != 0; // FIXME: not transparency
         let color: u8;
         if !b && !s {
             color = 0;
         } else if !b && s {
-            color = sprite_pixel|0x10
+            color = sprite_pixel | 0x10
         } else if b && !s {
             color = bg_pixel
         } else {
@@ -440,7 +439,7 @@ impl<M: Mapper> PPU<M> {
         self.back = Pixel {
             x: x,
             y: y,
-            c: PALETTE[self.read8(0x3f00|color as u16) as usize % 64],
+            c: PALETTE[self.read8(0x3f00 | color as u16) as usize % 64],
         };
     }
 
@@ -754,7 +753,7 @@ impl<M: Mapper> PPU<M> {
                 bit1 = ((tile_high >> (7 - i)) & 0x01) << 1;
             }
             data <<= 4;
-            data |= ((spr.pp<<2) | bit1 | bit0) as u32;
+            data |= ((spr.pp << 2) | bit1 | bit0) as u32;
         }
         data
     }
@@ -766,9 +765,10 @@ impl<M: Mapper> PPU<M> {
             if offset < 0 || offset > 7 {
                 continue;
             }
-            let color = ((self.sprites[i].pattern >> ((7-offset)*4)) & 0x0f) as u8;
-            if color % 4 == 0 { //FIXME
-                continue
+            let color = ((self.sprites[i].pattern >> ((7 - offset) * 4)) & 0x0f) as u8;
+            if color % 4 == 0 {
+                //FIXME
+                continue;
             }
             return (i, color);
         }
@@ -790,7 +790,7 @@ impl<M: Mapper> PPU<M> {
             // sprite 8*8 or 8*16
             let y = self.oam_data[i * 4 + 0];
             let row = self.scanline as i32 - y as i32;
-            if row < 0 || row >= size{
+            if row < 0 || row >= size {
                 continue;
             }
             if sprite_cnt < 8 {
@@ -800,7 +800,7 @@ impl<M: Mapper> PPU<M> {
                     y: self.oam_data[i * 4 + 0],
                     tile: self.oam_data[i * 4 + 1],
                     pp: self.oam_data[i * 4 + 2] & 0x03,
-                    attr: SpriteAttr::from_bits(self.oam_data[i * 4 + 2]&0xe0).unwrap(),
+                    attr: SpriteAttr::from_bits(self.oam_data[i * 4 + 2] & 0xe0).unwrap(),
                     pattern: 0,
                 };
                 spr.pattern = self.sprite_pattern(&spr, row as u32);
