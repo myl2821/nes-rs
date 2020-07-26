@@ -11,6 +11,8 @@ error-chain = "0.12"
 sdl2 = "0.34"
 bitflags = "1.2"
 lazy_static = "1.4.0"
+log = "0.4"
+simple_logger = "1.6"
 
 [dev-dependencies]
 csv = "1.1"

@@ -1,5 +1,9 @@
+#[macro_use]
+extern crate log;
 extern crate sdl2;
+extern crate simple_logger;
 
+use log::*;
 use nes::{Bus, Cartridge, Interrupt, Mapper0, CPU, PPU};
 use sdl2::event::Event;
 use sdl2::keyboard::Keycode;
@@ -17,6 +21,7 @@ const FPS: u32 = 30;
 const INTERVAL: u32 = 1_000_000_000u32 / FPS;
 
 fn main() {
+    simple_logger::init_with_level(Level::Debug).unwrap();
     let ags: Vec<String> = args().collect();
     let path = match ags.get(1) {
         Some(s) => s.clone(),
@@ -79,7 +84,6 @@ fn draw(rom_path: String) {
         let mut y: u32 = 0;
         'render: loop {
             let cpu_cycles = cpu.step();
-            //println!("{}", cpu.debug_info().0);
             let mut need_render = false;
 
             'ppu: for _ in 0..(cpu_cycles * 3) {
@@ -115,7 +119,7 @@ fn draw(rom_path: String) {
         canvas.present();
 
         let elapsed = last_frame_ts.elapsed().as_nanos() as u32;
-        println!("{} ns", elapsed);
+        debug!("frame time: {} ms", elapsed / 1_000_000);
         if elapsed < INTERVAL {
             let time_to_sleep = INTERVAL - elapsed;
             std::thread::sleep(Duration::new(0, time_to_sleep));
