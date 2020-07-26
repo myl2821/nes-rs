@@ -1,6 +1,6 @@
 extern crate csv;
 
-use nes::{new_mapper, Bus, Cartridge, Mapper0, CPU, PPU};
+use nes::{new_mapper, Bus, Cartridge, Mapper0, CPU, NES, PPU};
 use std::fs::File;
 use std::path::Path;
 

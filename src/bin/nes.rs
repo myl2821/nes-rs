@@ -4,48 +4,41 @@ extern crate sdl2;
 extern crate simple_logger;
 
 use log::*;
-use nes::{new_mapper, Bus, Cartridge, Interrupt, CPU, PPU};
+use nes::NES;
 use sdl2::event::Event;
 use sdl2::keyboard::Keycode;
 use sdl2::rect::Rect;
 use std::path::Path;
-use std::time::{Duration, Instant, SystemTime};
+use std::time::{Duration, Instant};
 
+use nes::nes::{SCAIL, SCREEN_HEIGHT, SCREEN_WIDTH};
 use sdl2::pixels::Color;
-use sdl2::pixels::PixelFormatEnum::RGB888;
-use sdl2::surface::Surface;
 use std::env::args;
+use std::error::Error;
 
-const SCAIL: u32 = 2;
-const SCREEN_WIDTH: u32 = 256 * SCAIL;
-const SCREEN_HEIGHT: u32 = 240 * SCAIL;
 const FPS: u32 = 60;
 const INTERVAL: u32 = 1_000_000_000u32 / FPS;
 
-fn main() {
-    simple_logger::init_with_level(Level::Debug).unwrap();
+fn main() -> Result<(), Box<dyn Error>> {
+    simple_logger::init_with_level(Level::Debug)?;
     let ags: Vec<String> = args().collect();
-    let path = match ags.get(1) {
+    let rom_path = match ags.get(1) {
         Some(s) => s.clone(),
         None => "tests/fixture/nestest.nes".to_owned(),
     };
-    draw(path);
+    let path = Path::new(&rom_path);
+    let mut nes = NES::load_rom(path)?;
+    Ok(play(nes))
 }
 
-fn draw(rom_path: String) {
-    let path = Path::new(&rom_path);
-    let mapper = new_mapper(path).unwrap();
-    let ppu = PPU::new(mapper);
-    let bus = Bus::new(ppu);
-    let mut cpu = CPU::new(bus);
-    cpu.reset();
-
+fn play(mut nes: NES) {
+    // init SDL2 renderer
     let sdl_context = sdl2::init().unwrap();
     let ev = sdl_context.event().unwrap();
     let video_subsystem = sdl_context.video().unwrap();
 
     let window = video_subsystem
-        .window("rust-sdl2 demo", SCREEN_WIDTH, SCREEN_HEIGHT)
+        .window("nes-rs", SCREEN_WIDTH, SCREEN_HEIGHT)
         .position_centered()
         .build()
         .unwrap();
@@ -61,7 +54,10 @@ fn draw(rom_path: String) {
 
     canvas.set_draw_color(Color::RGB(0, 0, 0));
     canvas.clear();
+    let texture_creator = canvas.texture_creator();
     let mut last_frame_ts = Instant::now();
+
+    // entering the SDL event loop!
     'running: loop {
         for event in event_pump.poll_iter() {
             match event {
@@ -80,56 +76,16 @@ fn draw(rom_path: String) {
         }
 
         // The rest of the game loop goes here...
-
-        let mut surface = Surface::new(SCREEN_WIDTH, SCREEN_HEIGHT, RGB888).unwrap();
-        let texture_creator = canvas.texture_creator();
-        'render: loop {
-            let cpu_cycles = cpu.step();
-            let mut x: u32 = 0;
-            let mut y: u32 = 0;
-            let mut need_render = false;
-
-            'ppu: for _ in 0..(cpu_cycles * 3) {
-                let interrupt = cpu.bus.ppu.borrow_mut().step();
-                match interrupt {
-                    Interrupt::NMI => {
-                        cpu.set_nmi();
-                        need_render = true;
-                    }
-                    _ => (),
-                }
-                let pixel = cpu.bus.ppu.borrow_mut().back;
-                x = pixel.x;
-                y = pixel.y;
-                if x >= 256 || y >= 240 {
-                    continue 'ppu;
-                }
-                surface
-                    .fill_rect(
-                        Rect::new(
-                            (pixel.x * SCAIL) as i32,
-                            (pixel.y * SCAIL) as i32,
-                            SCAIL,
-                            SCAIL,
-                        ),
-                        pixel.c,
-                    )
-                    .unwrap();
-            }
-            if need_render {
-                break 'render;
-            }
-        }
-
+        let surface = nes.next_surface();
         let texture = texture_creator
             .create_texture_from_surface(surface)
             .unwrap();
-
         canvas.copy(&texture, None, None).unwrap();
         canvas.present();
 
+        // sleep a while to sync FPS
         let elapsed = last_frame_ts.elapsed().as_nanos() as u32;
-        debug!("frame time: {} ms", elapsed / 1_000_000);
+        trace!("frame time: {} ms", elapsed / 1_000_000);
         if elapsed < INTERVAL {
             let time_to_sleep = INTERVAL - elapsed;
             std::thread::sleep(Duration::new(0, time_to_sleep));

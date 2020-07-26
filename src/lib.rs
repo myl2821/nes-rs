@@ -10,6 +10,7 @@ mod bus;
 mod cartridge;
 mod cpu;
 mod mapper;
+pub mod nes;
 mod palette;
 mod ppu;
 
@@ -18,6 +19,7 @@ pub use cartridge::{Cartridge, CartridgeHeader};
 pub use cpu::{Interrupt, CPU};
 pub use mapper::new as new_mapper;
 pub use mapper::{Mapper, Mapper0};
+pub use nes::NES;
 pub use palette::PALETTE;
 pub use ppu::PPU;
 
