@@ -410,10 +410,11 @@ impl<M: Mapper> PPU<M> {
         let mut bg_pixel = self.bg_pixel();
         let (idx, mut sprite_pixel) = self.sprite_pixel();
 
-        if x < 8 && !self.mask.contains(MaskFlag::bg_left) {
+        if !self.mask.contains(MaskFlag::bg) || (x < 8 && !self.mask.contains(MaskFlag::bg_left)) {
             bg_pixel = 0
         }
-        if x < 8 && !self.mask.contains(MaskFlag::spr_left) {
+        if !self.mask.contains(MaskFlag::spr) || (x < 8 && !self.mask.contains(MaskFlag::spr_left))
+        {
             sprite_pixel = 0
         }
         let b = bg_pixel % 4 != 0; // FIXME: not transparency
@@ -432,7 +433,7 @@ impl<M: Mapper> PPU<M> {
             if self.sprites[idx].attr.contains(SpriteAttr::priority) {
                 color = bg_pixel;
             } else {
-                color = sprite_pixel;
+                color = sprite_pixel | 0x10;
             }
         }
 
@@ -528,7 +529,8 @@ impl<M: Mapper> PPU<M> {
     fn write_scroll(&mut self, d: u8) {
         if self.w == 0 {
             self.t = (self.t & 0b11111111_11100000) | ((d >> 3) as u16);
-            self.x = d & 0b00000111
+            self.x = d & 0b00000111;
+            self.w = 1
         } else {
             self.t = (self.t & 0b10001100_00011111)
                 | (((d & 0b00000111) as u16) << 12)
