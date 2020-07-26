@@ -12,11 +12,13 @@ use std::path::Path;
 use std::time::{Duration, Instant, SystemTime};
 
 use sdl2::pixels::Color;
+use sdl2::pixels::PixelFormatEnum::RGB888;
+use sdl2::surface::Surface;
 use std::env::args;
 
 const SCAIL: u32 = 2;
-const SCREEN_WIDTH: u32 = 256;
-const SCREEN_HEIGHT: u32 = 240;
+const SCREEN_WIDTH: u32 = 256 * SCAIL;
+const SCREEN_HEIGHT: u32 = 240 * SCAIL;
 const FPS: u32 = 60;
 const INTERVAL: u32 = 1_000_000_000u32 / FPS;
 
@@ -45,11 +47,7 @@ fn draw(rom_path: String) {
     let video_subsystem = sdl_context.video().unwrap();
 
     let window = video_subsystem
-        .window(
-            "rust-sdl2 demo",
-            SCREEN_WIDTH * SCAIL,
-            SCREEN_HEIGHT * SCAIL,
-        )
+        .window("rust-sdl2 demo", SCREEN_WIDTH, SCREEN_HEIGHT)
         .position_centered()
         .build()
         .unwrap();
@@ -85,10 +83,11 @@ fn draw(rom_path: String) {
 
         // The rest of the game loop goes here...
 
-        let mut x: u32 = 0;
-        let mut y: u32 = 0;
+        let mut surface = Surface::new(SCREEN_WIDTH, SCREEN_HEIGHT, RGB888).unwrap();
         'render: loop {
             let cpu_cycles = cpu.step();
+            let mut x: u32 = 0;
+            let mut y: u32 = 0;
             let mut need_render = false;
 
             'ppu: for _ in 0..(cpu_cycles * 3) {
@@ -106,20 +105,29 @@ fn draw(rom_path: String) {
                 if x >= 256 || y >= 240 {
                     continue 'ppu;
                 }
-                canvas.set_draw_color(pixel.c);
-                canvas
-                    .fill_rect(Rect::new(
-                        (pixel.x * SCAIL) as i32,
-                        (pixel.y * SCAIL) as i32,
-                        SCAIL,
-                        SCAIL,
-                    ))
+                surface
+                    .fill_rect(
+                        Rect::new(
+                            (pixel.x * SCAIL) as i32,
+                            (pixel.y * SCAIL) as i32,
+                            SCAIL,
+                            SCAIL,
+                        ),
+                        pixel.c,
+                    )
                     .unwrap();
             }
             if need_render {
                 break 'render;
             }
         }
+
+        let texture_createor = canvas.texture_creator();
+        let texture = texture_createor
+            .create_texture_from_surface(surface)
+            .unwrap();
+
+        canvas.copy(&texture, None, None);
 
         canvas.present();
 
