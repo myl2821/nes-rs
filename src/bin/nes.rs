@@ -17,7 +17,7 @@ use std::env::args;
 const SCAIL: u32 = 2;
 const SCREEN_WIDTH: u32 = 256;
 const SCREEN_HEIGHT: u32 = 240;
-const FPS: u32 = 30;
+const FPS: u32 = 60;
 const INTERVAL: u32 = 1_000_000_000u32 / FPS;
 
 fn main() {
