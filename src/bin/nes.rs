@@ -84,6 +84,7 @@ fn draw(rom_path: String) {
         // The rest of the game loop goes here...
 
         let mut surface = Surface::new(SCREEN_WIDTH, SCREEN_HEIGHT, RGB888).unwrap();
+        let texture_creator = canvas.texture_creator();
         'render: loop {
             let cpu_cycles = cpu.step();
             let mut x: u32 = 0;
@@ -122,8 +123,7 @@ fn draw(rom_path: String) {
             }
         }
 
-        let texture_createor = canvas.texture_creator();
-        let texture = texture_createor
+        let texture = texture_creator
             .create_texture_from_surface(surface)
             .unwrap();
 
