@@ -4,7 +4,7 @@ extern crate sdl2;
 extern crate simple_logger;
 
 use log::*;
-use nes::{Bus, Cartridge, Interrupt, Mapper0, CPU, PPU};
+use nes::{new_mapper, Bus, Cartridge, Interrupt, CPU, PPU};
 use sdl2::event::Event;
 use sdl2::keyboard::Keycode;
 use sdl2::rect::Rect;
@@ -34,10 +34,8 @@ fn main() {
 
 fn draw(rom_path: String) {
     let path = Path::new(&rom_path);
-    let cartridge = Cartridge::new(path).unwrap();
-    let mapper0 = Mapper0::new(cartridge);
-
-    let ppu = PPU::new(mapper0);
+    let mapper = new_mapper(path).unwrap();
+    let ppu = PPU::new(mapper);
     let bus = Bus::new(ppu);
     let mut cpu = CPU::new(bus);
     cpu.reset();
@@ -127,8 +125,7 @@ fn draw(rom_path: String) {
             .create_texture_from_surface(surface)
             .unwrap();
 
-        canvas.copy(&texture, None, None);
-
+        canvas.copy(&texture, None, None).unwrap();
         canvas.present();
 
         let elapsed = last_frame_ts.elapsed().as_nanos() as u32;

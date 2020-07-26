@@ -1,4 +1,6 @@
 use crate::Cartridge;
+use crate::Result;
+use std::path::Path;
 
 // The NES’ limited memory was sufficient for early games, however as they became more
 // complex, games became larger and the memory was insufficient. To allow cartridges to
@@ -15,6 +17,14 @@ use crate::Cartridge;
 pub trait Mapper {
     fn read(&self, addr: u16) -> u8;
     fn write(&mut self, addr: u16, v: u8);
+}
+
+pub fn new(path: &Path) -> Result<Box<dyn Mapper>> {
+    let cartridge = Cartridge::new(path)?;
+    match cartridge.mapper {
+        0x00 => Ok(Box::new(Mapper0::new(cartridge))),
+        _ => Err("NES magic mismatch".into()),
+    }
 }
 
 // UNROM only allowed switching of PRG-ROM banks. It provided no support for CHR-ROM.

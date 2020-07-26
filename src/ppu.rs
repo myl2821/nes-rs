@@ -79,14 +79,14 @@ struct Sprite {
 // $3F10-$3F1F   |  $0010  |  Sprite Palette
 // $3F20-$3FFF   |  $00E0  |  Mirrors of $3F00-$3F1F
 // $4000-$FFFF   |  $C000  |  Mirrors of $0000-$3FFF
-pub struct PPU<M: Mapper> {
+pub struct PPU<M: Mapper + ?Sized> {
     name_table: [u8; 0x1000], // 4KB
     palette: [u8; 0x0020],    // 32B
 
     sprites: [Sprite; 8], // Only eight sprites are allowed per scanline
     sprite_cnt: usize,    // Valid sprite count
 
-    pub mapper: M,
+    pub mapper: Box<M>,
 
     ctrl: CtrlFlag,         // 0x2000  PPU Control Register
     mask: MaskFlag,         // 0x2001  PPU Mask Register
@@ -124,8 +124,8 @@ pub struct PPU<M: Mapper> {
     previous: bool,
 }
 
-impl<M: Mapper> PPU<M> {
-    pub fn new(mapper: M) -> Self {
+impl<M: Mapper + ?Sized> PPU<M> {
+    pub fn new(mapper: Box<M>) -> Self {
         let mut ppu = Self {
             name_table: [0; 0x1000],
             palette: [0; 0x0020],

@@ -25,7 +25,7 @@ bitflags! {
     }
 }
 
-pub struct CPU<T: Mapper> {
+pub struct CPU<T: Mapper + ?Sized> {
     // The program counter is a 16-bit register which holds the address of the next instruction to be executed
     PC: u16,
 
@@ -138,7 +138,7 @@ struct Info {
     mode: Mode,
 }
 
-impl<T: Mapper> CPU<T> {
+impl<T: Mapper + ?Sized> CPU<T> {
     pub fn new(bus: Bus<T>) -> Self {
         let mut cpu = CPU {
             PC: 0x0000,

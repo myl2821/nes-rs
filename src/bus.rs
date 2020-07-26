@@ -2,12 +2,12 @@ use crate::ppu::PPU;
 use crate::Mapper;
 use std::cell::RefCell;
 
-pub struct Bus<T: Mapper> {
+pub struct Bus<T: Mapper + ?Sized> {
     ram: [u8; 0x0800], // 2KB
     pub ppu: RefCell<PPU<T>>,
 }
 
-impl<T: Mapper> Bus<T> {
+impl<T: Mapper + ?Sized> Bus<T> {
     pub fn new(ppu: PPU<T>) -> Self {
         Self {
             ram: [0; 0x0800],
