@@ -13,7 +13,7 @@ use std::env::args;
 const SCAIL: u32 = 2;
 const SCREEN_WIDTH: u32 = 256;
 const SCREEN_HEIGHT: u32 = 240;
-const FPS: u32 = 60;
+const FPS: u32 = 30;
 const INTERVAL: u32 = 1_000_000_000u32 / FPS;
 
 fn main() {
@@ -77,21 +77,25 @@ fn draw(rom_path: String) {
 
         let mut x: u32 = 0;
         let mut y: u32 = 0;
-        loop {
+        'render: loop {
             let cpu_cycles = cpu.step();
             //println!("{}", cpu.debug_info().0);
+            let mut need_render = false;
 
-            for _ in 0..(cpu_cycles * 3) {
+            'ppu: for _ in 0..(cpu_cycles * 3) {
                 let interrupt = cpu.bus.ppu.borrow_mut().step();
                 match interrupt {
-                    Interrupt::NMI => cpu.set_nmi(),
+                    Interrupt::NMI => {
+                        cpu.set_nmi();
+                        need_render = true;
+                    }
                     _ => (),
                 }
                 let pixel = cpu.bus.ppu.borrow_mut().back;
                 x = pixel.x;
                 y = pixel.y;
-                if x >= 255 && y >= 240 {
-                    break;
+                if x >= 256 || y >= 240 {
+                    continue 'ppu;
                 }
                 canvas.set_draw_color(pixel.c);
                 canvas
@@ -103,14 +107,15 @@ fn draw(rom_path: String) {
                     ))
                     .unwrap();
             }
-            if x >= 255 && y >= 240 {
-                break;
+            if need_render {
+                break 'render;
             }
         }
 
         canvas.present();
 
         let elapsed = last_frame_ts.elapsed().as_nanos() as u32;
+        println!("{} ns", elapsed);
         if elapsed < INTERVAL {
             let time_to_sleep = INTERVAL - elapsed;
             std::thread::sleep(Duration::new(0, time_to_sleep));
