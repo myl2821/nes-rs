@@ -41,7 +41,7 @@ impl<T: Mapper> Bus<T> {
             0x4014 => todo!(),
             0x4015 => todo!(),
             0x4016 => 0, //todo!(),contrller not impl
-            0x4017 => todo!(),
+            0x4017 => 0,//todo!(),
             0x4018..=0x401f => 0, // normally disabled, maybe should return Err
             0x4020..=0xffff => self.ppu.borrow_mut().mapper.read(addr),
         }

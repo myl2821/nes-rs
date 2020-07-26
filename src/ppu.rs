@@ -37,11 +37,31 @@ bitflags! {
     }
 }
 
+bitflags! {
+    #[derive(Default)]
+    pub struct SpriteAttr: u8 {
+        const priority = 0x20;  // Sprite has priority over the background
+        const horizontal = 0x40;  // Flip the sprite horizontally
+        const vertical = 0x80;  // Flip the sprite vertically
+    }
+}
+
 #[derive(Debug, Clone, Copy)]
 pub struct Pixel {
     pub x: u32,
     pub y: u32,
     pub c: Color,
+}
+
+#[derive(Default, Debug)]
+struct Sprite {
+    i: usize,         // index of oam_data
+    x: u8,            // X-coordinate
+    y: u8,            // Y-coordinate of the top left of the sprite minus 1
+    tile: u8,         // Index number of the sprite in the pattern tables
+    pp: u8,           // Most significant two bits of the colour
+    attr: SpriteAttr, // Stores the attributes of the sprite
+    pattern: u32,     // 8 pixels, 8*4bits, every 4 bits represent one palette color
 }
 
 // http://wiki.nesdev.com/w/index.php/PPU_programmer_reference
@@ -63,7 +83,11 @@ pub struct PPU<M: Mapper> {
     name_table: [u8; 0x1000], // 4KB
     palette: [u8; 0x0020],    // 32B
 
+    sprites: [Sprite; 8], // Only eight sprites are allowed per scanline
+    sprite_cnt: usize,    // Valid sprite count
+
     pub mapper: M,
+
     ctrl: CtrlFlag,         // 0x2000  PPU Control Register
     mask: MaskFlag,         // 0x2001  PPU Mask Register
     status: StatusFlag,     // 0x2002  PPU status register
@@ -98,7 +122,6 @@ pub struct PPU<M: Mapper> {
 
     delay: u8,
     previous: bool,
-    // bus: Option<Rc<RefCell<Bus<T>>>>,
 }
 
 impl<M: Mapper> PPU<M> {
@@ -106,6 +129,8 @@ impl<M: Mapper> PPU<M> {
         let mut ppu = Self {
             name_table: [0; 0x1000],
             palette: [0; 0x0020],
+            sprites: Default::default(),
+            sprite_cnt: 0,
             mapper: mapper,
             ctrl: CtrlFlag::empty(),
             mask: MaskFlag::empty(),
@@ -267,7 +292,8 @@ impl<M: Mapper> PPU<M> {
                         // Cycles 257-320: The tile data for the sprites on the next scanline are fetched here.
                         257..=320 => {
                             if self.cycle == 257 {
-                                self.reload_x()
+                                self.reload_x();
+                                self.sprite_evaluation();
                             }
                         }
                         // Cycles 321-336: This is where the first two tiles for the next scanline are fetched, and loaded into the shift registers.
@@ -296,7 +322,10 @@ impl<M: Mapper> PPU<M> {
                                 self.incr_y()
                             }
                         }
-                        257 => self.reload_x(),
+                        257 => {
+                            self.reload_x();
+                            self.sprite_cnt = 0;
+                        }
                         // During pixels 280 through 304 of this scanline, the vertical scroll
                         // bits are reloaded if rendering is enabled.
                         280..=304 => self.reload_y(),
@@ -308,6 +337,8 @@ impl<M: Mapper> PPU<M> {
                 }
                 if self.cycle == 1 {
                     self.clear_v_blank();
+                    self.status.remove(StatusFlag::spr_hit);
+                    self.status.remove(StatusFlag::spr_ovf);
                 }
             }
             _ => panic!(),
@@ -355,14 +386,61 @@ impl<M: Mapper> PPU<M> {
         self.n_change()
     }
 
+
+    // The palette for the background runs from VRAM $3F00 to $3F0F;
+    // the palette for the sprites runs from $3F10 to $3F1F. Each color takes up one byte.
+    // Address      Purpose
+    // $3F00        Universal background color
+    // $3F01-$3F03  Background palette 0
+    // $3F05-$3F07  Background palette 1
+    // $3F09-$3F0B  Background palette 2
+    // $3F0D-$3F0F  Background palette 3
+    // $3F11-$3F13  Sprite palette 0
+    // $3F15-$3F17  Sprite palette 1
+    // $3F19-$3F1B  Sprite palette 2
+    // $3F1D-$3F1F  Sprite palette 3
+    //
+    // The palette entry at $3F00 is the background colour and is used for transparency.
+    //
+    // Mirroring is used so that every four bytes in the palettes is a copy of $3F00.
+    // Therefore $3F04, $3F08, $3F0C, $3F10, $3F14, $3F18 and $3F1C are just copies of $3F00
+    // and the total number of colours in each palette is 13, not 16.
     fn render_pixel(&mut self) {
         let x = self.cycle - 1;
         let y = self.scanline;
-        let bg_color = self.bg_color();
+        let mut bg_pixel = self.bg_pixel();
+        let (idx, mut sprite_pixel) = self.sprite_pixel();
+
+        if x < 8 && !self.mask.contains(MaskFlag::bg_left) {
+            bg_pixel = 0
+        }
+        if x < 8 && !self.mask.contains(MaskFlag::spr_left) {
+            sprite_pixel = 0
+        }
+        let b = bg_pixel%4 != 0;  // FIXME: not transparency
+        let s = sprite_pixel%4 != 0;  // FIXME: not transparency
+        let color: u8;
+        if !b && !s {
+            color = 0;
+        } else if !b && s {
+            color = sprite_pixel|0x10
+        } else if b && !s {
+            color = bg_pixel
+        } else {
+            if self.sprites[idx].i == 0 && x < 255 {
+                self.status.insert(StatusFlag::spr_hit)
+            }
+            if self.sprites[idx].attr.contains(SpriteAttr::priority) {
+                color = bg_pixel;
+            } else {
+                color = sprite_pixel;
+            }
+        }
+
         self.back = Pixel {
             x: x,
             y: y,
-            c: bg_color,
+            c: PALETTE[self.read8(0x3f00|color as u16) as usize % 64],
         };
     }
 
@@ -630,14 +708,112 @@ impl<M: Mapper> PPU<M> {
         self.tiles |= data as u64
     }
 
-    // Background palette address
-    fn bg_palette_addr(&self) -> u16 {
+    fn bg_pixel(&self) -> u8 {
         let data = ((self.tiles >> 32) as u32) >> ((7 - self.x) * 4);
-        0x3f00 + (data & 0x0f) as u16
+        (data & 0x0f) as u8
     }
 
-    fn bg_color(&self) -> Color {
-        PALETTE[(self.read8(self.bg_palette_addr()) % 64) as usize]
+    // 8x16 sprites use different pattern tables based on their index number.
+    // If the index number is even the sprite data is in the first pattern table at $0000,
+    // otherwise it is in the second pattern table at $1000.
+    fn sprite_pattern(&self, spr: &Sprite, row: u32) -> u32 {
+        let mut tile = spr.tile as u16;
+        let mut row = row;
+        let spr_tbl = match self.ctrl.contains(CtrlFlag::spr_tbl) {
+            true => 0x1000,
+            false => 0x0000,
+        };
+
+        let addr = if !self.ctrl.contains(CtrlFlag::spr_sz) {
+            if spr.attr.contains(SpriteAttr::vertical) {
+                row = 7 - row
+            }
+            spr_tbl | (tile << 4) | row as u16
+        } else {
+            if spr.attr.contains(SpriteAttr::vertical) {
+                row = 15 - row
+            }
+            tile &= 0xfe;
+            if row > 7 {
+                tile += 1;
+                row -= 8;
+            }
+            (spr_tbl & 1) | (tile << 4) | row as u16
+        };
+        let tile_low = self.read8(addr);
+        let tile_high = self.read8(addr + 8);
+        let mut data: u32 = 0;
+        for i in 0..=7 {
+            let bit1: u8;
+            let bit0: u8;
+            if spr.attr.contains(SpriteAttr::horizontal) {
+                bit0 = (tile_low >> i) & 0x01;
+                bit1 = ((tile_high >> i) & 0x01) << 1;
+            } else {
+                bit0 = (tile_low >> (7 - i)) & 0x01;
+                bit1 = ((tile_high >> (7 - i)) & 0x01) << 1;
+            }
+            data <<= 4;
+            data |= ((spr.pp<<2) | bit1 | bit0) as u32;
+        }
+        data
+    }
+
+    fn sprite_pixel(&self) -> (usize, u8) {
+        let x = self.cycle - 1;
+        for i in 0..self.sprite_cnt {
+            let offset = x as i32 - self.sprites[i].x as i32;
+            if offset < 0 || offset > 7 {
+                continue;
+            }
+            let color = ((self.sprites[i].pattern >> ((7-offset)*4)) & 0x0f) as u8;
+            if color % 4 == 0 { //FIXME
+                continue
+            }
+            return (i, color);
+        }
+        return (0, 0);
+    }
+
+    fn sprite_size(&self) -> i32 {
+        match self.ctrl.contains(CtrlFlag::spr_sz) {
+            true => 16,
+            false => 8,
+        }
+    }
+
+    fn sprite_evaluation(&mut self) {
+        let size = self.sprite_size();
+        let mut sprite_cnt = 0;
+
+        for i in 0..=63 {
+            // sprite 8*8 or 8*16
+            let y = self.oam_data[i * 4 + 0];
+            let row = self.scanline as i32 - y as i32;
+            if row < 0 || row >= size{
+                continue;
+            }
+            if sprite_cnt < 8 {
+                let mut spr = Sprite {
+                    i: i,
+                    x: self.oam_data[i * 4 + 3],
+                    y: self.oam_data[i * 4 + 0],
+                    tile: self.oam_data[i * 4 + 1],
+                    pp: self.oam_data[i * 4 + 2] & 0x03,
+                    attr: SpriteAttr::from_bits(self.oam_data[i * 4 + 2]&0xe0).unwrap(),
+                    pattern: 0,
+                };
+                spr.pattern = self.sprite_pattern(&spr, row as u32);
+                self.sprites[sprite_cnt] = spr
+            }
+            sprite_cnt += 1;
+            if sprite_cnt > 8 {
+                sprite_cnt = 8;
+                self.status.insert(StatusFlag::spr_ovf);
+                break;
+            }
+        }
+        self.sprite_cnt = sprite_cnt
     }
 }
 
