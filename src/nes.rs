@@ -1,13 +1,9 @@
-use crate::{new_mapper, Bus, Mapper, CPU, PPU};
+use crate::{new_mapper, Bus, Mapper, CPU, PPU, SCAIL, SCREEN_HEIGHT, SCREEN_WIDTH};
 use crate::{Interrupt, Result};
 use sdl2::pixels::PixelFormatEnum::RGB888;
 use sdl2::rect::Rect;
 use sdl2::surface::Surface;
 use std::path::Path;
-
-pub const SCAIL: u32 = 2;
-pub const SCREEN_WIDTH: u32 = 256 * SCAIL;
-pub const SCREEN_HEIGHT: u32 = 240 * SCAIL;
 
 pub struct NES {
     cpu: CPU<dyn Mapper>,

@@ -4,14 +4,12 @@ extern crate sdl2;
 extern crate simple_logger;
 
 use log::*;
-use nes::NES;
+use nes::{NES, SCREEN_HEIGHT, SCREEN_WIDTH};
 use sdl2::event::Event;
 use sdl2::keyboard::Keycode;
-use sdl2::rect::Rect;
 use std::path::Path;
 use std::time::{Duration, Instant};
 
-use nes::nes::{SCAIL, SCREEN_HEIGHT, SCREEN_WIDTH};
 use sdl2::pixels::Color;
 use std::env::args;
 use std::error::Error;
@@ -27,7 +25,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         None => "tests/fixture/nestest.nes".to_owned(),
     };
     let path = Path::new(&rom_path);
-    let mut nes = NES::load_rom(path)?;
+    let nes = NES::load_rom(path)?;
     Ok(play(nes))
 }
 

@@ -6,20 +6,24 @@ extern crate bitflags;
 extern crate lazy_static;
 extern crate sdl2;
 
+pub const SCAIL: u32 = 2;
+pub const SCREEN_WIDTH: u32 = 256 * SCAIL;
+pub const SCREEN_HEIGHT: u32 = 240 * SCAIL;
+
 mod bus;
 mod cartridge;
 mod cpu;
 mod mapper;
-pub mod nes;
+mod nes;
 mod palette;
 mod ppu;
 
+pub use self::nes::NES;
 pub use bus::Bus;
 pub use cartridge::{Cartridge, CartridgeHeader};
 pub use cpu::{Interrupt, CPU};
 pub use mapper::new as new_mapper;
 pub use mapper::{Mapper, Mapper0};
-pub use nes::NES;
 pub use palette::PALETTE;
 pub use ppu::PPU;
 
