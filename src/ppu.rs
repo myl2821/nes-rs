@@ -601,8 +601,8 @@ impl<M: Mapper + ?Sized> PPU<M> {
         if (self.v & 0x7000) != 0x7000 {
             self.v += 0x1000
         } else {
-            self.v &= !0x7000;
-            let mut y = (self.v & 0x03e0) >> 5;
+            self.v &= !0x7000; // clear fine Y
+            let mut y = (self.v & 0x03e0) >> 5; // course Y
             match y {
                 29 => {
                     y = 0;
@@ -611,7 +611,7 @@ impl<M: Mapper + ?Sized> PPU<M> {
                 31 => y = 0,
                 _ => y += 1,
             }
-            self.v = (self.v & !0x03e0) | (y << 5)
+            self.v = (self.v & !0x03e0) | (y << 5) // reset course Y
         }
     }
 
@@ -699,10 +699,12 @@ impl<M: Mapper + ?Sized> PPU<M> {
         let plane_0 = self.pattern_table_tile_low;
         let plane_1 = self.pattern_table_tile_high;
         let mut data: u32 = 0;
+
+        // fetch 8 bits bg color at a time, embedded as u32 with big ending.
         for i in 0..=7 {
-            let a = self.attribute_table_byte;
-            let bit0 = (plane_0 >> (7 - i)) & 0x01;
-            let bit1 = ((plane_1 >> (7 - i)) & 0x01) << 1;
+            let a = self.attribute_table_byte; // color bits 3-2
+            let bit0 = (plane_0 >> (7 - i)) & 0x01; // color bit 0
+            let bit1 = ((plane_1 >> (7 - i)) & 0x01) << 1; // color bit 1
             data <<= 4;
             data |= (a | bit1 | bit0) as u32;
         }
@@ -710,7 +712,10 @@ impl<M: Mapper + ?Sized> PPU<M> {
     }
 
     fn bg_pixel(&self) -> u8 {
-        let data = ((self.tiles >> 32) as u32) >> ((7 - self.x) * 4);
+        // rshift 32 to get current pixel
+        // plus rshift(7 - self.x) for fine X scroll
+        // fine X scroll value is set by $2005
+        let data = ((self.tiles >> 32) as u32) >> ((7 - self.x) << 2);
         (data & 0x0f) as u8
     }
 
