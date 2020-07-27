@@ -10,6 +10,7 @@ pub const SCAIL: u32 = 2;
 pub const SCREEN_WIDTH: u32 = 256 * SCAIL;
 pub const SCREEN_HEIGHT: u32 = 240 * SCAIL;
 
+mod controller;
 mod bus;
 mod cartridge;
 mod cpu;
@@ -19,6 +20,7 @@ mod palette;
 mod ppu;
 
 pub use self::nes::NES;
+pub use controller::{Controller, Button};
 pub use bus::Bus;
 pub use cartridge::{Cartridge, CartridgeHeader};
 pub use cpu::{Interrupt, CPU};

@@ -1,16 +1,21 @@
 use crate::ppu::PPU;
 use crate::Mapper;
+use crate::Controller;
 use std::cell::RefCell;
 
 pub struct Bus<T: Mapper + ?Sized> {
     ram: [u8; 0x0800], // 2KB
+    pub controller1: RefCell<Controller>,
+    pub controller2: RefCell<Controller>,
     pub ppu: RefCell<PPU<T>>,
 }
 
 impl<T: Mapper + ?Sized> Bus<T> {
-    pub fn new(ppu: PPU<T>) -> Self {
+    pub fn new(ppu: PPU<T>, controller1: Controller, controller2: Controller) -> Self {
         Self {
             ram: [0; 0x0800],
+            controller1: RefCell::new(controller1),
+            controller2: RefCell::new(controller2),
             ppu: RefCell::new(ppu),
         }
     }
@@ -40,8 +45,8 @@ impl<T: Mapper + ?Sized> Bus<T> {
             0x4000..=0x4013 => 0,
             0x4014 => todo!(),
             0x4015 => todo!(),
-            0x4016 => 0,          //todo!(),contrller not impl
-            0x4017 => 0,          //todo!(),
+            0x4016 => self.controller1.borrow_mut().read(),
+            0x4017 => self.controller2.borrow_mut().read(),
             0x4018..=0x401f => 0, // normally disabled, maybe should return Err
             0x4020..=0xffff => self.ppu.borrow_mut().mapper.read(addr),
         }
@@ -72,7 +77,10 @@ impl<T: Mapper + ?Sized> Bus<T> {
                 need_suspend = true;
             }
             0x4015 => (), //FIXME todo!(),
-            0x4016 => (), //todo!(), contrller not impl
+            0x4016 => {
+                self.controller1.borrow_mut().write(v);
+                self.controller2.borrow_mut().write(v);
+            },
             0x4017 => (), //todo!(),
             0x4018..=0x401f => todo!(),
             0x4020..=0xffff => self.ppu.borrow_mut().mapper.write(addr, v),
