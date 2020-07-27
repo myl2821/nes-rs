@@ -47,7 +47,10 @@ impl Controller {
     }
 
     fn get_button(&self) -> u8 {
-        match self.button.contains(Button::from_bits(1<<self.idx).unwrap()) {
+        match self
+            .button
+            .contains(Button::from_bits(1 << self.idx).unwrap())
+        {
             true => 1,
             false => 0,
         }
