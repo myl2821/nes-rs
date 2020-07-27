@@ -1,6 +1,6 @@
 extern crate csv;
 
-use nes::{new_mapper, Bus, Cartridge, Mapper0, CPU, NES, PPU};
+use nes::{new_mapper, Bus, Cartridge, Controller, Mapper0, CPU, NES, PPU};
 use std::fs::File;
 use std::path::Path;
 
@@ -23,8 +23,10 @@ fn mapper0() {
     let path = Path::new("tests/fixture/nestest.nes");
     let mapper = new_mapper(path).unwrap();
 
+    let controller1 = Controller::new();
+    let controller2 = Controller::new();
     let ppu = PPU::new(mapper);
-    let bus = Bus::new(ppu);
+    let bus = Bus::new(ppu, controller1, controller2);
     let cpu = CPU::new(bus);
 
     assert_eq!(0xc004, cpu.rst());
@@ -35,8 +37,10 @@ fn compare_with_nestest() {
     let path = Path::new("tests/fixture/nestest.nes");
     let mapper = new_mapper(path).unwrap();
 
+    let controller1 = Controller::new();
+    let controller2 = Controller::new();
     let ppu = PPU::new(mapper);
-    let bus = Bus::new(ppu);
+    let bus = Bus::new(ppu, controller1, controller2);
     let mut cpu = CPU::new(bus);
 
     let mut i = 1;

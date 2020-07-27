@@ -1,6 +1,6 @@
 use crate::ppu::PPU;
-use crate::Mapper;
 use crate::Controller;
+use crate::Mapper;
 use std::cell::RefCell;
 
 pub struct Bus<T: Mapper + ?Sized> {
@@ -80,7 +80,7 @@ impl<T: Mapper + ?Sized> Bus<T> {
             0x4016 => {
                 self.controller1.borrow_mut().write(v);
                 self.controller2.borrow_mut().write(v);
-            },
+            }
             0x4017 => (), //todo!(),
             0x4018..=0x401f => todo!(),
             0x4020..=0xffff => self.ppu.borrow_mut().mapper.write(addr, v),

@@ -1,11 +1,11 @@
-use crate::{new_mapper, Bus, Mapper, CPU, PPU, Controller, SCAIL, SCREEN_HEIGHT, SCREEN_WIDTH};
-use crate::{Interrupt, Button, Result};
+use crate::{new_mapper, Bus, Controller, Mapper, CPU, PPU, SCAIL, SCREEN_HEIGHT, SCREEN_WIDTH};
+use crate::{Button, Interrupt, Result};
+use sdl2::keyboard::{KeyboardState, Scancode};
 use sdl2::pixels::PixelFormatEnum::RGB888;
 use sdl2::rect::Rect;
 use sdl2::surface::Surface;
-use sdl2::keyboard::{KeyboardState,Scancode};
-use std::path::Path;
 use std::collections::HashMap;
+use std::path::Path;
 
 pub struct NES {
     cpu: CPU<dyn Mapper>,
@@ -21,8 +21,9 @@ lazy_static! {
         (Scancode::F, Button::B),
         (Scancode::R, Button::SELECT),
         (Scancode::T, Button::START),
-    ].into_iter().collect();
-
+    ]
+    .into_iter()
+    .collect();
     pub static ref KEY_MAP_2: HashMap<Scancode, Button> = vec![
         (Scancode::U, Button::UP),
         (Scancode::J, Button::DOWN),
@@ -32,7 +33,9 @@ lazy_static! {
         (Scancode::L, Button::B),
         (Scancode::O, Button::SELECT),
         (Scancode::P, Button::START),
-    ].into_iter().collect();
+    ]
+    .into_iter()
+    .collect();
 }
 
 impl NES {
@@ -106,5 +109,4 @@ impl NES {
             }
         }
     }
-
 }
