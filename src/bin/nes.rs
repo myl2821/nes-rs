@@ -1,4 +1,3 @@
-#[macro_use]
 extern crate log;
 extern crate sdl2;
 extern crate simple_logger;
@@ -73,6 +72,8 @@ fn play(mut nes: NES) {
             }
         }
 
+        nes.set_ctrl_1(&event_pump.keyboard_state());
+        nes.set_ctrl_2(&event_pump.keyboard_state());
         // The rest of the game loop goes here...
         let surface = nes.next_surface();
         let texture = texture_creator
