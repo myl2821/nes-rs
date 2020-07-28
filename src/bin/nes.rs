@@ -54,6 +54,8 @@ fn play(mut nes: NES) {
     let texture_creator = canvas.texture_creator();
     let mut last_frame_ts = Instant::now();
 
+    let mut pause = false;
+
     // entering the SDL event loop!
     'running: loop {
         for event in event_pump.poll_iter() {
@@ -68,19 +70,27 @@ fn play(mut nes: NES) {
                     ev.push_event(Event::Quit { timestamp: 0 });
                     continue 'running;
                 }
+                Event::KeyDown {
+                    keycode: Some(Keycode::Space),
+                    ..
+                } => {
+                    pause = !pause;
+                }
                 _ => {}
             }
         }
 
-        nes.set_ctrl_1(&event_pump.keyboard_state());
-        nes.set_ctrl_2(&event_pump.keyboard_state());
-        // The rest of the game loop goes here...
-        let surface = nes.next_surface();
-        let texture = texture_creator
-            .create_texture_from_surface(surface)
-            .unwrap();
-        canvas.copy(&texture, None, None).unwrap();
-        canvas.present();
+        if !pause {
+            nes.set_ctrl_1(&event_pump.keyboard_state());
+            nes.set_ctrl_2(&event_pump.keyboard_state());
+            // The rest of the game loop goes here...
+            let surface = nes.next_surface();
+            let texture = texture_creator
+                .create_texture_from_surface(surface)
+                .unwrap();
+            canvas.copy(&texture, None, None).unwrap();
+            canvas.present();
+        }
 
         // sleep a while to sync FPS
         let elapsed = last_frame_ts.elapsed().as_nanos() as u32;
