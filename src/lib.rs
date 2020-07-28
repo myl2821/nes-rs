@@ -21,7 +21,7 @@ mod ppu;
 
 pub use self::nes::NES;
 pub use bus::Bus;
-pub use cartridge::{Cartridge, CartridgeHeader};
+pub use cartridge::Cartridge;
 pub use controller::{Button, Controller};
 pub use cpu::{Interrupt, CPU};
 pub use mapper::new as new_mapper;

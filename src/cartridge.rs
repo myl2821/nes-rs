@@ -8,7 +8,7 @@ use std::slice;
 
 pub const MAGIC_NUMBER: u32 = 0x1a53454e;
 
-pub struct CartridgeHeader {
+struct CartridgeHeader {
     // Should be 0x1a53454e to identify the file as an iNES file
     pub magic: u32,
     // number of 16 KB PRG-ROM banks
@@ -26,7 +26,7 @@ pub struct CartridgeHeader {
 }
 
 impl CartridgeHeader {
-    fn read_struct<T, R: Read>(mut read: R) -> io::Result<T> {
+    fn read_struct<T, R: Read>(read: &mut R) -> io::Result<T> {
         let num_bytes = ::std::mem::size_of::<T>();
         unsafe {
             let mut s = ::std::mem::MaybeUninit::uninit().assume_init();
@@ -41,8 +41,7 @@ impl CartridgeHeader {
         }
     }
 
-    pub fn new(path: &Path) -> Result<Self> {
-        let f = File::open(path)?;
+    pub fn new<R: Read>(f: &mut R) -> Result<Self> {
         Ok(Self::read_struct(f)?)
     }
 
@@ -80,7 +79,8 @@ pub struct Cartridge {
 
 impl Cartridge {
     pub fn new(path: &Path) -> Result<Self> {
-        let header = CartridgeHeader::new(path)?;
+        let mut f = File::open(path)?;
+        let header = CartridgeHeader::new(&mut f)?;
         if header.magic != MAGIC_NUMBER {
             return Err("NES magic mismatch".into());
         }
@@ -88,13 +88,6 @@ impl Cartridge {
         let mapper = header.mapper_num();
         let mirror = header.mirror_num();
         let has_sram = header.has_sram();
-
-        let mut f = File::open(path)?;
-
-        // Skip header info
-        f.seek(SeekFrom::Start(
-            ::std::mem::size_of::<CartridgeHeader>() as u64
-        ))?;
 
         // Ignore trainer data
         if header.has_trainer() {
