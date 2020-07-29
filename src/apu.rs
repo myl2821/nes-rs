@@ -25,6 +25,11 @@ impl Divider {
         false
     }
 
+    pub fn update(&mut self, period: u32) {
+        self.period = period;
+        self.reset();
+    }
+
     pub fn reset(&mut self) {
         self.cycle = 0;
     }
@@ -144,6 +149,72 @@ impl LengthCounter {
     }
 }
 
+// https://wiki.nesdev.com/w/index.php/APU_Envelope
+struct Envelope {
+    volume: u8,
+    loop_enable: bool,
+    disable: bool,
+    n: u8, // constant volume/envelope divider period
+    counter: u8,
+    reset: bool,
+    divider: Divider,
+}
+
+impl Envelope {
+    pub fn new() -> Self {
+        Self {
+            volume: 0,
+            loop_enable: false,
+            disable: false,
+            n: 0,
+            counter: 15,
+            reset: false,
+            divider: Divider::new(1),
+        }
+    }
+
+    // $4000/$4004
+    // --ld nnnn       loop, disable, n
+    pub fn update(&mut self, v: u8) {
+        self.loop_enable = (v>>5)&0x01 == 1;
+        self.disable = (v>>4)&0x01 == 1;
+        self.n = v&0x0f;
+
+        if self.disable {
+            self.volume = self.n;
+        } else {
+            self.divider.update((self.n + 1) as u32);
+        }
+    }
+
+    pub fn reset(&mut self) {
+        self.reset = true;
+    }
+
+    pub fn tick(&mut self) {
+        if self.reset {
+            self.reset = false;
+            self.counter = 15;
+            self.divider.reset();
+        } else {
+            if self.divider.tick() {
+                if self.counter == 0 && self.loop_enable {
+                    self.counter = 15;
+                } else if self.counter != 0 {
+                    self.counter -= 1
+                }
+            }
+        }
+
+        if self.disable {
+            self.volume = self.n;
+        } else {
+            self.volume = self.counter;
+        }
+    }
+}
+
+
 macro_rules! test_idle {
     ($sequencer: expr) => {
         for i in 0..89489 {
@@ -211,4 +282,34 @@ fn length_counter() {
 
     lc.tick();
     assert!(!lc.activated());
+}
+
+#[test]
+fn envelope() {
+    let mut envelope = Envelope::new();
+
+    // constant volume
+    envelope.update(0x1f);
+    envelope.tick();
+    assert_eq!(0x0f, envelope.volume);
+
+    // saw envelope and loop disable
+    envelope.reset();
+    envelope.update(0x00);
+    for i in 0..0x10 {
+        envelope.tick();
+        assert_eq!(15-i, envelope.volume);
+    }
+    envelope.tick();
+    assert_eq!(0, envelope.volume);
+
+    // saw envelope and loop enable
+    envelope.reset();
+    envelope.update(0x20);
+    for i in 0..0x10 {
+        envelope.tick();
+        assert_eq!(15-i, envelope.volume);
+    }
+    envelope.tick();
+    assert_eq!(15, envelope.volume)
 }
