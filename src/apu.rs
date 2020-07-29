@@ -13,7 +13,11 @@ struct Divider {
 
 impl Divider {
     pub fn new(period: u32) -> Self {
-        Self { cycle: 0, period }
+        assert!(period > 0);
+        Self {
+            cycle: period,
+            period,
+        }
     }
 
     pub fn tick(&mut self) -> bool {
@@ -244,7 +248,7 @@ impl Sweep {
 
     // NOTE: the pulse should mute itself when targer period not in [$08, $7FF]
     pub fn period_update(&self, period: u16, pulse_channel: u8) -> u16 {
-        let mut amount = (period >> self.shift_bits) as i16;
+        let mut amount = period >> self.shift_bits;
         if self.negate {
             if pulse_channel == 2 {
                 amount += 1;
@@ -293,7 +297,7 @@ impl Sweep {
 struct Pulse {
     envelope: Envelope,
     sweep: Sweep,
-    sequencer: !, // TODO: impl pulse Sequencer
+    // sequencer: TODO
     length_counter: LengthCounter,
 }
 

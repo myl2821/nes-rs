@@ -2,7 +2,7 @@ use crate::Result;
 
 use std::fs::File;
 use std::io::prelude::*;
-use std::io::{self, Read, SeekFrom};
+use std::io::{self, Read};
 use std::path::Path;
 use std::slice;
 
