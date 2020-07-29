@@ -17,9 +17,9 @@ impl Divider {
     }
 
     pub fn tick(&mut self) -> bool {
-        self.cycle += 1;
-        if self.cycle >= self.period {
-            self.cycle = 0;
+        self.cycle -= 1;
+        if self.cycle == 0 {
+            self.cycle = self.period;
             return true;
         }
         false
@@ -31,7 +31,7 @@ impl Divider {
     }
 
     pub fn reset(&mut self) {
-        self.cycle = 0;
+        self.cycle = self.period;
     }
 }
 
@@ -176,9 +176,9 @@ impl Envelope {
     // $4000/$4004
     // --ld nnnn       loop, disable, n
     pub fn update(&mut self, v: u8) {
-        self.loop_enable = (v>>5)&0x01 == 1;
-        self.disable = (v>>4)&0x01 == 1;
-        self.n = v&0x0f;
+        self.loop_enable = (v >> 5) & 0x01 == 1;
+        self.disable = (v >> 4) & 0x01 == 1;
+        self.n = v & 0x0f;
 
         if self.disable {
             self.volume = self.n;
@@ -214,10 +214,92 @@ impl Envelope {
     }
 }
 
+// https://wiki.nesdev.com/w/index.php/APU_Sweep
+struct Sweep {
+    enabled: bool,
+    negate: bool,
+    reload: bool,
+    shift_bits: u8,
+    divider: Divider,
+}
+
+impl Sweep {
+    pub fn new() -> Self {
+        Self {
+            enabled: false,
+            shift_bits: 0,
+            negate: false,
+            divider: Divider::new(1),
+            reload: false,
+        }
+    }
+
+    pub fn update(&mut self, v: u8) {
+        self.enabled = (v & 0x80 != 0);
+        self.divider.update(((v & 0x70) >> 4) as u32);
+        self.negate = (v & 0x08 != 0);
+        self.shift_bits = v & 0x07;
+        self.reload = true;
+    }
+
+    // NOTE: the pulse should mute itself when targer period not in [$08, $7FF]
+    pub fn period_update(&self, period: u16, pulse_channel: u8) -> u16 {
+        let mut amount = (period >> self.shift_bits) as i16;
+        if self.negate {
+            if pulse_channel == 2 {
+                amount += 1;
+            }
+        }
+        match self.negate {
+            true => period - amount,
+            false => period + amount,
+        }
+    }
+
+    // If the divider's counter is zero, the sweep is enabled, and the sweep unit is
+    // not muting the channel: The pulse's period is adjusted.
+    //
+    // If the divider's counter is zero or the reload flag is true:
+    // The counter is set to P and the reload flag is cleared. Otherwise, the counter is decremented.
+    //
+    // @return: whether the pulse's period should be adjusted
+    pub fn tick(&mut self) -> bool {
+        let divider_tick = self.divider.tick();
+
+        if divider_tick || self.reload {
+            self.reload = false;
+            self.divider.reset();
+        }
+
+        divider_tick && self.enabled
+    }
+}
+
+//            Sweep -----> Timer
+//                    |            |
+//                    |            |
+//                    |            v
+//                    |        Sequencer   Length Counter
+//                    |            |             |
+//                    |            |             |
+//                    v            v             v
+// Envelope -------> Gate -----> Gate -------> Gate --->(to mixer)
+//
+// The mixer receives the current envelope volume except when:
+// - The sequencer output is zero
+// - overflow from the sweep unit's adder is silencing the channel
+// - the length counter is zero
+// - the timer has a value less than eight
+struct Pulse {
+    envelope: Envelope,
+    sweep: Sweep,
+    sequencer: !, // TODO: impl pulse Sequencer
+    length_counter: LengthCounter,
+}
 
 macro_rules! test_idle {
     ($sequencer: expr) => {
-        for i in 0..89489 {
+        for _ in 0..89489 {
             let evt = $sequencer.tick();
             assert_eq!(evt.bits(), 0);
         }
@@ -298,7 +380,7 @@ fn envelope() {
     envelope.update(0x00);
     for i in 0..0x10 {
         envelope.tick();
-        assert_eq!(15-i, envelope.volume);
+        assert_eq!(15 - i, envelope.volume);
     }
     envelope.tick();
     assert_eq!(0, envelope.volume);
@@ -308,7 +390,7 @@ fn envelope() {
     envelope.update(0x20);
     for i in 0..0x10 {
         envelope.tick();
-        assert_eq!(15-i, envelope.volume);
+        assert_eq!(15 - i, envelope.volume);
     }
     envelope.tick();
     assert_eq!(15, envelope.volume)
