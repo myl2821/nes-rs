@@ -21,7 +21,6 @@ mod palette;
 mod ppu;
 
 pub use self::nes::NES;
-pub use apu::FrameSequencer;
 pub use bus::Bus;
 pub use cartridge::Cartridge;
 pub use controller::{Button, Controller};

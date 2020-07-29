@@ -1,6 +1,11 @@
 // ref: http://wiki.nesdev.com/w/index.php/APU
 //      http://nesdev.com/apu_ref.txt
 
+const LENGTH_TABLE: [u8; 32] = [
+    0x0a, 0xfe, 0x14, 0x02, 0x28, 0x04, 0x50, 0x06, 0xa0, 0x08, 0x3c, 0x0a, 0x0e, 0x0c, 0x1a, 0x0e,
+    0x0c, 0x10, 0x18, 0x12, 0x30, 0x14, 0x60, 0x16, 0xc0, 0x18, 0x48, 0x1a, 0x10, 0x1c, 0x20, 0x1e,
+];
+
 struct Divider {
     cycle: u32,
     period: u32,
@@ -36,7 +41,7 @@ bitflags! {
     }
 }
 
-pub struct FrameSequencer {
+struct FrameSequencer {
     cycle: u8,
     seq_len: u8, // 4 (mode 0) / 5 (mode 1)
     irq_disable: bool,
@@ -106,4 +111,104 @@ impl FrameSequencer {
         }
         SeqEvent::empty()
     }
+}
+
+// A length counter allows automatic duration control
+struct LengthCounter {
+    pub enabled: bool,
+    pub halt: bool,
+    counter: u8,
+}
+
+impl LengthCounter {
+    pub fn new(length_index: u8) -> Self {
+        Self {
+            enabled: true,
+            halt: false,
+            counter: LENGTH_TABLE[(length_index as usize >> 3) & 0x1f],
+        }
+    }
+
+    pub fn update(&mut self, length_index: u8) {
+        self.counter = LENGTH_TABLE[(length_index as usize >> 3) & 0x1f]
+    }
+
+    pub fn tick(&mut self) {
+        if self.counter > 0 {
+            self.counter -= 1;
+        }
+    }
+
+    pub fn activated(&self) -> bool {
+        self.counter > 0
+    }
+}
+
+macro_rules! test_idle {
+    ($sequencer: expr) => {
+        for i in 0..89489 {
+            let evt = $sequencer.tick();
+            assert_eq!(evt.bits(), 0);
+        }
+    };
+}
+
+#[test]
+fn sequencer() {
+    let mut sequencer = FrameSequencer::new();
+    for _ in 0..10 {
+        test_idle!(sequencer);
+        let evt = sequencer.tick();
+        assert_eq!(evt.bits(), 0x04);
+
+        test_idle!(sequencer);
+        let evt = sequencer.tick();
+        assert_eq!(evt.bits(), 0x06);
+
+        test_idle!(sequencer);
+        let evt = sequencer.tick();
+        assert_eq!(evt.bits(), 0x04);
+
+        test_idle!(sequencer);
+        let evt = sequencer.tick();
+        assert_eq!(evt.bits(), 0x07);
+    }
+
+    let evt = sequencer.update(0xc0);
+    assert_eq!(evt.bits(), 0x06);
+
+    sequencer.reset();
+    for _ in 0..10 {
+        test_idle!(sequencer);
+        let evt = sequencer.tick();
+        assert_eq!(evt.bits(), 0x06);
+
+        test_idle!(sequencer);
+        let evt = sequencer.tick();
+        assert_eq!(evt.bits(), 0x04);
+
+        test_idle!(sequencer);
+        let evt = sequencer.tick();
+        assert_eq!(evt.bits(), 0x06);
+
+        test_idle!(sequencer);
+        let evt = sequencer.tick();
+        assert_eq!(evt.bits(), 0x04);
+
+        test_idle!(sequencer);
+        let evt = sequencer.tick();
+        assert_eq!(evt.bits(), 0x00);
+    }
+}
+
+#[test]
+fn length_counter() {
+    let mut lc = LengthCounter::new(1 << 3);
+    for _ in 0..0xfd {
+        lc.tick();
+        assert!(lc.activated());
+    }
+
+    lc.tick();
+    assert!(!lc.activated());
 }
