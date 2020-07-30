@@ -515,7 +515,7 @@ impl<M: Mapper + ?Sized> PPU<M> {
     // 0x2004
     fn write_oam_data(&mut self, d: u8) {
         self.oam_data[self.oam_addr as usize] = d;
-        self.oam_addr += 1
+        self.oam_addr.wrapping_add(1);
     }
 
     // 0x2005

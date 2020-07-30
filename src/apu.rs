@@ -6,6 +6,13 @@ const LENGTH_TABLE: [u8; 32] = [
     0x0c, 0x10, 0x18, 0x12, 0x30, 0x14, 0x60, 0x16, 0xc0, 0x18, 0x48, 0x1a, 0x10, 0x1c, 0x20, 0x1e,
 ];
 
+const SEQUENCE_TABLE: [[u8; 8]; 4] = [
+    [0, 1, 0, 0, 0, 0, 0, 0],
+    [0, 1, 1, 0, 0, 0, 0, 0],
+    [0, 1, 1, 1, 1, 0, 0, 0],
+    [1, 0, 0, 1, 1, 1, 1, 1],
+];
+
 struct Divider {
     cycle: u32,
     period: u32,
@@ -218,6 +225,46 @@ impl Envelope {
     }
 }
 
+struct Timer {
+    period: u16,
+    divider: Divider,
+}
+
+impl Timer {
+    pub fn new() -> Self {
+        Self {
+            period: 0,
+            divider: Divider::new(1790000),
+        }
+    }
+
+    // $4002/$4006
+    // llll llll    low 8 bits of period
+    pub fn update_low(&mut self, v: u8) {
+        self.period = (self.period & 0x0700) | v as u16
+    }
+
+    // $4003/$4007
+    // ---- -hhh    upper 3 bits of period
+    pub fn update_high(&mut self, v: u8) {
+        self.period = self.period | (((v & 0x07) as u16) << 8);
+        self.divider.update(self.period as u32 + 1);
+    }
+
+    pub fn update(&mut self, v: u16) {
+        self.period = v;
+        self.divider.update(self.period as u32 + 1)
+    }
+
+    pub fn tick(&mut self) -> bool {
+        self.divider.tick()
+    }
+
+    pub fn silent(&self) -> bool {
+        self.period < 8
+    }
+}
+
 // https://wiki.nesdev.com/w/index.php/APU_Sweep
 struct Sweep {
     enabled: bool,
@@ -279,6 +326,29 @@ impl Sweep {
     }
 }
 
+struct Sequencer {
+    counter: u8,
+    output: u8, // 0: low, 1: high
+}
+
+impl Sequencer {
+    pub fn new() -> Self {
+        Self {
+            counter: 0,
+            output: 0,
+        }
+    }
+
+    pub fn tick(&mut self, select: u8) {
+        self.counter = (self.counter + 1) & 0x07;
+        self.output = SEQUENCE_TABLE[select as usize][self.counter as usize]
+    }
+
+    pub fn reset(&mut self) {
+        self.counter = 0
+    }
+}
+
 //            Sweep -----> Timer
 //                    |            |
 //                    |            |
@@ -295,10 +365,70 @@ impl Sweep {
 // - the length counter is zero
 // - the timer has a value less than eight
 struct Pulse {
+    enabled: bool,
+    channel: u8,
+    duty_cycle: u8,
     envelope: Envelope,
     sweep: Sweep,
-    // sequencer: TODO
+    timer: Timer,
+    sequencer: Sequencer,
     length_counter: LengthCounter,
+}
+
+impl Pulse {
+    pub fn new(channel: u8) -> Self {
+        Self {
+            enabled: false,
+            channel: channel,
+            duty_cycle: 0,
+            envelope: Envelope::new(),
+            sweep: Sweep::new(),
+            timer: Timer::new(),
+            sequencer: Sequencer::new(),
+            length_counter: LengthCounter::new(1),
+        }
+    }
+
+    pub fn write_ctrl(&mut self, v: u8) {
+        self.duty_cycle = (v >> 6) & 0x03;
+        self.envelope.update(v);
+        self.length_counter.halt = (v >> 5) & 0x01 == 0;
+    }
+
+    pub fn write_sweep(&mut self, v: u8) {
+        self.sweep.update(v)
+    }
+
+    pub fn write_timer_low(&mut self, v: u8) {
+        self.timer.update_low(v);
+    }
+
+    pub fn write_timer_high(&mut self, v: u8) {
+        self.timer.update_high(v);
+        self.length_counter.update(v >> 3);
+        self.envelope.reset();
+        self.sequencer.reset();
+    }
+
+    pub fn tick(&mut self) -> u8 {
+        if !self.length_counter.activated() || self.timer.silent() {
+            return 0;
+        }
+        if self.timer.tick() {
+            self.sequencer.tick(self.duty_cycle);
+        }
+
+        if self.sequencer.output == 1 {
+            self.envelope.volume
+        } else {
+            0
+        }
+    }
+}
+
+pub struct APU {
+    pulse1: Pulse,
+    pulse2: Pulse,
 }
 
 macro_rules! test_idle {
