@@ -34,4 +34,4 @@ cargo build --release
 
 ## License
 
-MIT
+WTFP:
